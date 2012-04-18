@@ -56,9 +56,16 @@ struct EdgeVal{
 	//planes at its two sides
 	//two planes may share more than one edge if there is a hole between the two planes
 	int p[2];
+  bool hasConn;
+  EdgeVal():hasConn(false){
+  }
 };
 
-typedef std::vector<Vec3> Connector;
+struct Connector{
+  std::vector<Vec3>l;
+  int pid[2];
+};
+
 //a plane may have more one line segment if it has holes inside
 class Plane{
 public:
@@ -90,10 +97,13 @@ public:
 	maps from vertex indices to indices into planes
 	*/
 	std::vector<std::map<int, VertIdx> > vertp;
+  std::vector<Connector>c;
+
 	void scale (real_t s);
 	/**@param t thickness*/
 	void zz(real_t t);
 	void slot();
+  void connector();
 	void buildEdge();
 	//map from input vertex id to [1..n]
 	std::map<int,int>vid;

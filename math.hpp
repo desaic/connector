@@ -37,7 +37,7 @@ struct Vec3{
     return *this;
   }
 
-  Vec3 cross(Vec3 & a){
+  Vec3 cross(const Vec3 & a){
     return Vec3(x[1]*a.x[2]-x[2]*a.x[1],
 		-x[0]*a.x[2]+x[2]*a.x[0],
 		x[0]*a.x[1]-x[1]*a.x[0]);
