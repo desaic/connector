@@ -19,7 +19,8 @@ offset a little so that tv0 is not exactly on the line
 real_t normalOffset=3;
 real_t unitRatio=2;
 real_t slotUnit=1;
-real_t testExtend=0.5;
+//must be at least 1
+real_t testExtend=1;
 real_t reserveRatio=0.075;
 int spots=3;
 real_t polyArea(std::vector<Vert> & l)
@@ -327,10 +328,10 @@ void PolyMesh::slot()
         }
         Vec3 mid=alpha*v0+(1-alpha)*v1;
         mid-=lineNormal*(shift+start-testLen);
-        mid-=lineDir*(testLen*2+t)/2;
+        mid-=lineDir*(testLen+t)/2;
         std::vector<Vert>rect;
 
-        make_rect(mid,lineDir,lineNormal,t+2*testLen,
+        make_rect(mid,lineDir,lineNormal,t+testLen,
                   slot_len+2*testLen, rect);
         size_t jj0=rect.size()-1;
         for(size_t jj=0;jj<rect.size();jj++){
