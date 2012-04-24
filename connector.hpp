@@ -103,10 +103,10 @@ public:
 	void scale (real_t s);
 	/**@param t thickness*/
 	void zz(real_t t);
+	bool isConvex(const Edge & e, const EdgeVal&ev);
 	void slot(real_t frac);
   void connector();
 	void buildEdge();
-  bool isConvex(const Edge & e, const EdgeVal&ev);
 	//map from input vertex id to [1..n]
 	std::map<int,int>vid;
 	void save_result(const char * filename);
