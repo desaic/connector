@@ -80,7 +80,7 @@ public:
 	size_t size(){
 		return l.size();
 	}
-	
+
 };
 #include "clipper.hpp"
 using ClipperLib::Polygons;
@@ -106,6 +106,7 @@ public:
 	void slot(real_t frac);
   void connector();
 	void buildEdge();
+  bool isConvex(const Edge & e, const EdgeVal&ev);
 	//map from input vertex id to [1..n]
 	std::map<int,int>vid;
 	void save_result(const char * filename);
@@ -129,7 +130,7 @@ bool pnpoly(std::vector<T>& l,T & test)
 /**@brief two line segments intersect if
    for both segments,
    the end points are at different sides of the other segment
-   
+
 */
 bool lineIntersect(Vec3 la0,Vec3 la1,Vec3 lb0, Vec3 lb1);
 
