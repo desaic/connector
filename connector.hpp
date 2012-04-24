@@ -107,6 +107,7 @@ public:
 	void slot(real_t frac);
   void connector();
 	void buildEdge();
+	void edgeVertPos(const Edge &e, int planeIdx, Vec3 &v0,Vec3 & v1);
 	//map from input vertex id to [1..n]
 	std::map<int,int>vid;
 	void save_result(const char * filename);

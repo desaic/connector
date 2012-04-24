@@ -266,6 +266,15 @@ void make_rect(Vec3 &start, Vec3 & lineDir, Vec3 &normal,
   rect.push_back(Vert(v));
 }
 
+void PolyMesh::edgeVertPos(const Edge &e, int planeIdx, Vec3 &v0,Vec3 & v1)
+{
+  VertIdx & vi0 = vertp[e.id[0]][planeIdx];
+  VertIdx & vi1 = vertp[e.id[1]][planeIdx];
+  std::vector<Vert>&lineseg =  planes[vi0.i][vi0.j];
+  v0  = lineseg[vi0.k].v;
+  v1  = lineseg[vi1.k].v;
+}
+
 void PolyMesh::slot(real_t frac)
 {
   std::map<Edge,EdgeVal>::iterator it;
@@ -312,12 +321,8 @@ void PolyMesh::slot(real_t frac)
       alpha=spot/(spots+1.0);
       for(size_t ii=0; ii<2; ii++) {
         int planeIdx = pid[ii];
-        VertIdx & vi0 = vertp[it->first.id[0]][planeIdx];
-        VertIdx & vi1 = vertp[it->first.id[1]][planeIdx];
-        std::vector<Vert>&lineseg =  planes[vi0.i][vi0.j];
-        Vec3 v0  = lineseg[vi0.k].v;
-        Vec3 v1  = lineseg[vi1.k].v;
-
+        Vec3 v0, v1;
+        edgeVertPos(it->first, planeIdx, v0,v1);
         Vec3 lineDir=v1-v0;
         real_t len = lineDir.norm();
         lineDir/=len;
@@ -334,9 +339,6 @@ void PolyMesh::slot(real_t frac)
                   slot_len+testLen, rect);
         size_t jj0=rect.size()-1;
         for(size_t jj=0; jj<rect.size(); jj++) {
-          //TODO:
-          //reject if any vertex of the rectangle is not inside the polygon
-          //or any edge of the rectangle intersects with the polygon
           bool expected=true;
           for(size_t seg=0; seg<poly[planeIdx].size(); seg++) {
             Polygon polySeg = poly[planeIdx][seg];
@@ -347,7 +349,6 @@ void PolyMesh::slot(real_t frac)
             }
             bool ret = pnpoly(lineseg, rect[jj]);
             if(ret!=expected) {
-              //std::cout<<"outside "<<planeIdx<<"\n";
               possible = false;
               goto ENDEDGELOOP;
             }
@@ -360,9 +361,7 @@ void PolyMesh::slot(real_t frac)
               }
               bool intersect = lineIntersect(rect[jj].v,rect[jj0].v,
                                              lineseg[kk0].v,lineseg[kk].v);
-
               if(intersect) {
-                //std::cout<<"intersect"<<planeIdx<<"\n";
                 possible=false;
                 goto ENDEDGELOOP;
               }
@@ -387,11 +386,8 @@ ENDEDGELOOP:
       it->second.connSize=slot_len;
       for(size_t ii=0; ii<2; ii++) {
         int planeIdx = pid[ii];
-        VertIdx& vi0 = vertp[it->first.id[0]][planeIdx];
-        VertIdx& vi1 = vertp[it->first.id[1]][planeIdx];
-        std::vector<Vert> & lineseg =  planes[vi0.i][vi0.j];
-        Vec3 v0  = lineseg[vi0.k].v;
-        Vec3 v1  = lineseg[vi1.k].v;
+        Vec3 v0, v1;
+        edgeVertPos(it->first, planeIdx, v0,v1);
         Vec3 mid=alpha*v0+(1-alpha)*v1;
 
         Vec3 lineDir=v1-v0;
@@ -446,7 +442,6 @@ void PolyMesh::connector()
     baseShape[2]=Vec3(-u,-t,0);
     baseShape[3]=Vec3(-u-slot_len,-t,0);
     baseShape[4]=Vec3(-u-extra/2-slot_len,0,0);
-    //  baseShape[5]=Vec3(-2*u-l,0,0);
     baseShape[5]=Vec3(-u-extra/2-slot_len,u,0);
 
     int pid[2]= {it->second.p[0],it->second.p[1]};
@@ -517,8 +512,6 @@ void PolyMesh::zz(real_t _t)
 {
   buildEdge();
   t=(_t/obj_scale)*intscale;
-  real_t width =t*teethRatio;
-  //	std::map<Edge, bool> processed;
   std::map<Edge,EdgeVal>::iterator it;
   poly.resize(planes.size());
 
@@ -555,7 +548,6 @@ void PolyMesh::zz(real_t _t)
       continue;
     }
     for(size_t ii=0; ii<1; ii++) {
-      real_t s=0;
       int planeIdx = pid[ii];
       VertIdx& vi0 = vertp[it->first.id[0]][planeIdx];
       VertIdx& vi1 = vertp[it->first.id[1]][planeIdx];
@@ -591,38 +583,21 @@ void PolyMesh::zz(real_t _t)
 
 
       printf("depth %lf,%lf\n",depth0,depth1);
-      //first start at 0
-      //second time start at 1
-      int nTeeth=ii;
-      //teeth vertices
-      // <-- lineNormal
-      //          line direction
-      // tv01--tv0   |
-      //    |  |     |
-      //    |  |    \|/
-      //tv11|__|tv1
-
-      width=len;
-      s=nTeeth*width;
-      //      while(s<len){
       ClipperLib::Clipper c;
       c.AddPolygons(poly[pid[ii]],ClipperLib::ptSubject);
 
       Polygons rect(1);
 
-      real_t alpha = -0.001;//s/len;
+      real_t alpha = -0.001;
       Vec3 tv0=(1-alpha)*v0+alpha*v1;
-      //	Vec3 tv01=tv0+depth*lineNormal;
       Vec3 tv01=tv0+depth0*dir0;
       //offset a little so that tv0 is not exactly on the line
       tv0 += lineNormal*normalOffset;
       rect[0].push_back(IntPoint((long64)tv0[0],(long64)tv0[1]));
       rect[0].push_back(IntPoint((long64)tv01[0],(long64)tv01[1]));
 
-      alpha = 1.001;//(nTeeth+1)*width/len;
-      //  if(alpha>1){alpha=1.0000001;}
+      alpha = 1.001;
       Vec3 tv1=(1-alpha)*v0+alpha*v1;
-      //Vec3 tv11=tv1+lineNormal*depth;
       Vec3 tv11=tv1+depth1*dir1;
       tv1+=lineNormal*normalOffset;
       rect[0].push_back(IntPoint((long64)tv11[0],(long64)tv11[1]));
@@ -640,9 +615,6 @@ void PolyMesh::zz(real_t _t)
         poly[pid[ii]]=solution;
 
       }
-      nTeeth+=2;
-      s=nTeeth*width;
-      //	}
     }
   }
 }
