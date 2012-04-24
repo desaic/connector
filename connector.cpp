@@ -494,13 +494,24 @@ void PolyMesh::connector()
         Vec3 exv = Vec3(extend,u,0);
         conn.l.push_back(exv);
         conn.l.insert(conn.l.end(),rot.begin(),rot.end());
-
       }
     }
     c.push_back(conn);
   }
 }
 
+void fix_dir(Vec3 & dir, const Vec3 & lineDir, const Vec3 lineNormal)
+{
+  if(dir.dot(lineNormal)>=0) {
+    dir=-lineNormal;
+  }
+  if(dir.dot(lineNormal)>-0.3) {
+    dir=-lineNormal;
+  }
+  if(dir.dot(lineDir)>0) {
+    dir=-lineNormal;
+  }
+}
 
 void PolyMesh::zz(real_t _t)
 {
@@ -570,28 +581,12 @@ void PolyMesh::zz(real_t _t)
 
       Vec3 dir0 = v_1-v0;
       dir0/=dir0.norm();
-      if(dir0.dot(lineNormal)>=0) {
-        dir0=-lineNormal;
-      }
-      if(dir0.dot(lineNormal)>-0.3) {
-        dir0=-lineNormal;
-      }
-      if(dir0.dot(lineDir)>0) {
-        dir0=-lineNormal;
-      }
+      fix_dir(dir0,lineDir,lineNormal);
       real_t depth0=depth/(-dir0.dot(lineNormal));
 
       Vec3 dir1 = v2-v1;
       dir1/=dir1.norm();
-      if(dir1.dot(lineNormal)>=0) {
-        dir1=-lineNormal;
-      }
-      if(dir1.dot(lineNormal)>-0.3) {
-        dir1=-lineNormal;
-      }
-      if(dir1.dot(lineDir)<0) {
-        dir1=-lineNormal;
-      }
+      fix_dir(dir1,-lineDir, lineNormal);
       real_t depth1=depth/(-dir1.dot(lineNormal));
 
 
@@ -654,21 +649,21 @@ void PolyMesh::zz(real_t _t)
 
 bool PolyMesh::isConvex(const Edge & e, const EdgeVal&ev)
 {
-    int pid[2]= {ev.p[0],ev.p[1]};
-    int planeIdx = pid[0];
-    VertIdx& vi0 = vertp[e.id[0]][planeIdx];
-    VertIdx& vi1 = vertp[e.id[1]][planeIdx];
-    std::vector<Vert> & lineseg =  planes[vi0.i][vi0.j];
-    Vec3 v0  = lineseg[vi0.k].v;
-    Vec3 v1  = lineseg[vi1.k].v;
-    Vec3 lineDir=v1-v0;
-    Vec3 &n1=planes[pid[0]].n;
-    Vec3 &ax = planes[pid[0]].ax;
-    Vec3 &ay = planes[pid[0]].ay;
-    Vec3 n2 = planes[pid[1]].n;
-    n2 = Vec3(n2.dot(ax),n2.dot(ay),n2.dot(n1));
-    Vec3 zaxis = n2.cross(Vec3(0,0,1));
-    return zaxis.dot(lineDir)<=0;
+  int pid[2]= {ev.p[0],ev.p[1]};
+  int planeIdx = pid[0];
+  VertIdx& vi0 = vertp[e.id[0]][planeIdx];
+  VertIdx& vi1 = vertp[e.id[1]][planeIdx];
+  std::vector<Vert> & lineseg =  planes[vi0.i][vi0.j];
+  Vec3 v0  = lineseg[vi0.k].v;
+  Vec3 v1  = lineseg[vi1.k].v;
+  Vec3 lineDir=v1-v0;
+  Vec3 &n1=planes[pid[0]].n;
+  Vec3 &ax = planes[pid[0]].ax;
+  Vec3 &ay = planes[pid[0]].ay;
+  Vec3 n2 = planes[pid[1]].n;
+  n2 = Vec3(n2.dot(ax),n2.dot(ay),n2.dot(n1));
+  Vec3 zaxis = n2.cross(Vec3(0,0,1));
+  return zaxis.dot(lineDir)<=0;
 }
 
 bool lineIntersect(Vec3 la0,Vec3 la1,Vec3 lb0, Vec3 lb1) {

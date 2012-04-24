@@ -18,7 +18,7 @@ struct Vec3{
   Vec3 operator-(Vec3 &a){
     return Vec3(x[0]-a.x[0],x[1]-a.x[1],x[2]-a.x[2]);
   }
-  Vec3 operator-(){
+  Vec3 operator-()const{
     return Vec3(-x[0],-x[1],-x[2]);
   }
   Vec3 operator+(const Vec3 &a)const{
