@@ -5,7 +5,8 @@ real_t size = 12; //inches
 real_t t=0.12;//thickness
 int main(int argc, char * argv[])
 {
-  const char * filename = "plane.txt";
+  const char * filename = "bunny_30.txt";
+  size=8;
   if(argc>1){
     filename=argv[1];
   }
@@ -16,7 +17,8 @@ int main(int argc, char * argv[])
 	pm.scale(INT_SCALE);
 	pm.obj_scale=size;
 	pm.zz(t);
-  pm.slot();
+  pm.slot(1);
+  pm.slot(0.5);
   pm.connector();
 	pm.save_result("zz.txt");
 	return 0;

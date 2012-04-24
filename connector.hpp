@@ -57,6 +57,7 @@ struct EdgeVal{
 	//two planes may share more than one edge if there is a hole between the two planes
 	int p[2];
   bool hasConn;
+  real_t connSize;
   EdgeVal():hasConn(false){
   }
 };
@@ -102,7 +103,7 @@ public:
 	void scale (real_t s);
 	/**@param t thickness*/
 	void zz(real_t t);
-	void slot();
+	void slot(real_t frac);
   void connector();
 	void buildEdge();
 	//map from input vertex id to [1..n]
