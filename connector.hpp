@@ -116,6 +116,8 @@ public:
 	void save_result(const char * filename);
   std::vector<Connector> conns;
   void chopAlongEdge(const Edge&e, const EdgeVal & ev, int ii,real_t depth,  Polygon & rect);
+  void chopPoly(const Polygon & poly, int pid, ClipperLib::ClipType ct=ClipperLib::ctDifference);
+
 };
 
 template<class T>

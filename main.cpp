@@ -20,6 +20,7 @@ int main(int argc, char * argv[])
   pm.slot(1);
   pm.slot(0.5);
   pm.connector();
+  //pm.teeth();
 	pm.save_result("zz.txt");
 	return 0;
 }
