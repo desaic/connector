@@ -78,6 +78,7 @@ struct Vec3{
   real_t x[3];
 };
 Vec3 operator*(real_t c, const Vec3 & v);
-
-
+/**@brief tangent half angle formula
+*/
+real_t half_tan(real_t cosine);
 #endif

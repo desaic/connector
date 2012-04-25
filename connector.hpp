@@ -6,8 +6,10 @@
 #include <string>
 #include <map>
 #include <iostream>
+#include "clipper.hpp"
 //teeth width with respect to thickness
 extern real_t teethRatio;
+using ClipperLib::Polygon;
 struct Vert{
 	int id;
 	Vec3 v;
@@ -82,7 +84,7 @@ public:
 	}
 
 };
-#include "clipper.hpp"
+
 using ClipperLib::Polygons;
 class PolyMesh{
 public:
@@ -106,12 +108,14 @@ public:
 	bool isConvex(const Edge & e, const EdgeVal&ev);
 	void slot(real_t frac);
   void connector();
+  void teeth();
 	void buildEdge();
 	void edgeVertPos(const Edge &e, int planeIdx, Vec3 &v0,Vec3 & v1);
 	//map from input vertex id to [1..n]
 	std::map<int,int>vid;
 	void save_result(const char * filename);
   std::vector<Connector> conns;
+  void chopAlongEdge(const Edge&e, const EdgeVal & ev, int ii,real_t depth,  Polygon & rect);
 };
 
 template<class T>

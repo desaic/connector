@@ -10,8 +10,8 @@ using ClipperLib::Polygons;
 using ClipperLib::Polygon;
 using ClipperLib::IntPoint;
 #define PI 3.1415926
-real_t teethRatio=5;
-real_t min_depth_ratio=1/teethRatio;
+real_t teethRatio=1;
+real_t min_depth_ratio=0.2;
 
 /**@brief
 offset a little so that tv0 is not exactly on the line
@@ -22,6 +22,82 @@ real_t slotUnit=1;
 real_t startRatio=2;
 real_t testExtend=1;
 real_t reserveRatio=0.07;
+real_t extraRatio=0.06;
+void fix_dir(Vec3 & dir, const Vec3 & lineDir, const Vec3 lineNormal);
+void PolyMesh::chopAlongEdge(const Edge&e,const EdgeVal & ev, int ii,real_t depth, Polygon & rect)
+{
+      int planeIdx = ev.p[ii];
+      VertIdx& vi0 = vertp[e.id[0]][planeIdx];
+      VertIdx& vi1 = vertp[e.id[1]][planeIdx];
+      std::vector<Vert> & lineseg =  planes[vi0.i][vi0.j];
+      Vec3 v0  = lineseg[vi0.k].v;
+      Vec3 v1  = lineseg[vi1.k].v;
+      //vertex before v0
+      Vec3 v_1 = vi0.k==0 ?
+                 lineseg[lineseg.size()-1].v : lineseg[vi0.k-1].v;
+      //vertex after v1
+      Vec3 v2  = lineseg[(vi1.k+1)%lineseg.size()].v;
+
+      Vec3 lineDir=v1-v0;
+      real_t len = lineDir.norm();
+      lineDir/=len;
+      //(a,b)-->(b,-a) is perpendicular on the right of the edge
+      Vec3 lineNormal = Vec3(lineDir[1],-lineDir[0],0);
+      //second time teeth grow the other way
+      if(ii==1) {
+        lineNormal=-lineNormal;
+      }
+
+      Vec3 dir0 = v_1-v0;
+      dir0/=dir0.norm();
+      fix_dir(dir0,lineDir,lineNormal);
+      real_t depth0=depth/(-dir0.dot(lineNormal));
+
+      Vec3 dir1 = v2-v1;
+      dir1/=dir1.norm();
+      fix_dir(dir1,-lineDir, lineNormal);
+      real_t depth1=depth/(-dir1.dot(lineNormal));
+
+      real_t alpha = -0.001;
+      Vec3 tv0=(1-alpha)*v0+alpha*v1;
+      Vec3 tv01=tv0+depth0*dir0;
+      //offset a little so that tv0 is not exactly on the line
+      tv0 += lineNormal*normalOffset;
+      rect.push_back(IntPoint((long64)tv0[0],(long64)tv0[1]));
+      rect.push_back(IntPoint((long64)tv01[0],(long64)tv01[1]));
+
+      alpha = 1.001;
+      Vec3 tv1=(1-alpha)*v0+alpha*v1;
+      Vec3 tv11=tv1+depth1*dir1;
+      tv1+=lineNormal*normalOffset;
+      rect.push_back(IntPoint((long64)tv11[0],(long64)tv11[1]));
+      rect.push_back(IntPoint((long64)tv1[0],(long64)tv1[1]));
+}
+
+/**@brief 1.chop away both sides
+2. add teeth
+*/
+void PolyMesh::teeth()
+{
+  std::map<Edge,EdgeVal>::iterator it;
+  for(it=eset.begin(); it!=eset.end(); it++) {
+
+    int pid[2]= {it->second.p[0],it->second.p[1]};
+    Vec3 n1=planes[pid[0]].n, n2=planes[pid[1]].n;
+    real_t cosine=n1.dot(n2);
+    real_t chop=0;
+    if(isConvex(it->first,it->second)){
+      real_t halftan=half_tan(cosine);
+      chop=t*halftan*(cosine+0.5);
+
+    }else{
+      real_t halftan=half_tan(cosine);
+      chop=(t/2)/halftan;
+
+    }
+  }
+}
+
 int spots=3;
 real_t polyArea(std::vector<Vert> & l)
 {
@@ -296,9 +372,7 @@ void PolyMesh::slot(real_t frac)
     Vec3 &n2 = planes[pid[1]].n;
 
     real_t cosine = n1.dot(n2);
-    real_t sine = std::sqrt(1-cosine*cosine);
-    //tangent half angle formula
-    real_t halftangent = sine/(1+std::abs(cosine));
+    real_t halftangent = half_tan(std::abs(cosine));
     if(cosine>0) {
       //obtuse angle
       shift = (t/2)*halftangent;
@@ -425,12 +499,10 @@ void PolyMesh::connector()
 {
   //laser cutter cuts away things
   //leave a bit extra material for friction fit
-  real_t unitlen = unitRatio*t;//-t*reserveRatio/2);
+  real_t unitlen = unitRatio*t;
   real_t u = unitlen;
-  //  real_t l = unitRatio*t;//+t*reserveRatio)*slotUnit;
-  //  std::reverse(baseShape.begin(),baseShape.end());
   std::map<Edge,EdgeVal>::iterator it;
-  real_t extra=t*0.06;
+  real_t extra=t*extraRatio;
   for(it = eset.begin(); it!=eset.end(); it++) {
     if( !it->second.hasConn) {
       continue;
@@ -476,9 +548,7 @@ void PolyMesh::connector()
         rot[ri]=tmp;
       }
       if(cosine>0) {
-        real_t sine = std::sqrt(1-cosine*cosine);
-        //half angle
-        real_t halftan=sine/(1+cosine);
+        real_t halftan=half_tan(cosine);
         real_t extend=u*halftan;
         Vec3 exv = Vec3(extend,u,0);
         conn.l.push_back(exv);
@@ -535,9 +605,7 @@ void PolyMesh::zz(real_t _t)
       depth = std::sqrt(1-cosine*cosine)*t/2;
     } else {
       //acute angle
-      real_t sine = std::sqrt(1-cosine*cosine);
-      //tangent half angle formula
-      real_t halftangent = sine/(1-cosine);
+      real_t halftangent = half_tan(std::abs(cosine));
       if(halftangent<min_depth_ratio) {
         halftangent=min_depth_ratio;
       }
@@ -548,63 +616,11 @@ void PolyMesh::zz(real_t _t)
       continue;
     }
     for(size_t ii=0; ii<1; ii++) {
-      int planeIdx = pid[ii];
-      VertIdx& vi0 = vertp[it->first.id[0]][planeIdx];
-      VertIdx& vi1 = vertp[it->first.id[1]][planeIdx];
-      std::vector<Vert> & lineseg =  planes[vi0.i][vi0.j];
-      Vec3 v0  = lineseg[vi0.k].v;
-      Vec3 v1  = lineseg[vi1.k].v;
-      //vertex before v0
-      Vec3 v_1 = vi0.k==0 ?
-                 lineseg[lineseg.size()-1].v : lineseg[vi0.k-1].v;
-      //vertex after v1
-      Vec3 v2  = lineseg[(vi1.k+1)%lineseg.size()].v;
-
-      Vec3 lineDir=v1-v0;
-      real_t len = lineDir.norm();
-      lineDir/=len;
-      //(a,b)-->(b,-a) is perpendicular on the right of the edge
-      //(-b,a) is on the other side
-      Vec3 lineNormal = Vec3(lineDir[1],-lineDir[0],0);
-      //second time teeth grow the other way
-      if(ii==1) {
-        lineNormal=-lineNormal;
-      }
-
-      Vec3 dir0 = v_1-v0;
-      dir0/=dir0.norm();
-      fix_dir(dir0,lineDir,lineNormal);
-      real_t depth0=depth/(-dir0.dot(lineNormal));
-
-      Vec3 dir1 = v2-v1;
-      dir1/=dir1.norm();
-      fix_dir(dir1,-lineDir, lineNormal);
-      real_t depth1=depth/(-dir1.dot(lineNormal));
-
-
-      printf("depth %lf,%lf\n",depth0,depth1);
       ClipperLib::Clipper c;
+      Polygon rect;
+      chopAlongEdge(it->first,it->second, ii,depth, rect);
       c.AddPolygons(poly[pid[ii]],ClipperLib::ptSubject);
-
-      Polygons rect(1);
-
-      real_t alpha = -0.001;
-      Vec3 tv0=(1-alpha)*v0+alpha*v1;
-      Vec3 tv01=tv0+depth0*dir0;
-      //offset a little so that tv0 is not exactly on the line
-      tv0 += lineNormal*normalOffset;
-      rect[0].push_back(IntPoint((long64)tv0[0],(long64)tv0[1]));
-      rect[0].push_back(IntPoint((long64)tv01[0],(long64)tv01[1]));
-
-      alpha = 1.001;
-      Vec3 tv1=(1-alpha)*v0+alpha*v1;
-      Vec3 tv11=tv1+depth1*dir1;
-      tv1+=lineNormal*normalOffset;
-      rect[0].push_back(IntPoint((long64)tv11[0],(long64)tv11[1]));
-      rect[0].push_back(IntPoint((long64)tv1[0],(long64)tv1[1]));
-
-      c.AddPolygons(rect,ClipperLib::ptClip);
-
+      c.AddPolygon(rect,ClipperLib::ptClip);
       Polygons solution;
       bool ret = c.Execute(ClipperLib::ctDifference,solution);
       if(solution.size()<1) {
