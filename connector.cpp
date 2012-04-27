@@ -16,17 +16,18 @@ real_t min_depth_ratio=0.2;
 /**@brief
 offset a little so that tv0 is not exactly on the line
 */
-real_t normalOffset=3;
+real_t normalOffset=10;
 real_t unitRatio=2;
 real_t slotUnit=1;
 real_t startRatio=2;
 real_t testExtend=1;
 real_t reserveRatio=0.07;
 real_t extraRatio=0.06;
-
-void make_rect(Vec3 &start, Vec3 & lineDir, Vec3 &normal,
+#define CLIP_VAL(x,y) ((x)<(y)?(y):(x))
+void make_rect(Vec3 &start, const Vec3 & lineDir, const Vec3 &normal,
                real_t t, real_t len,std::vector<Vert> & rect);
 void vert2poly(const std::vector<Vert> & rect, Polygon & p);
+void poly2vert(const Polygon & polySeg, std::vector<Vert>&lineseg);
 void fix_dir(Vec3 & dir, const Vec3 & lineDir, const Vec3 lineNormal);
 void PolyMesh::chopAlongEdge(const Edge&e,const EdgeVal & ev, int ii,real_t depth, Polygon & rect)
 {
@@ -92,44 +93,91 @@ void PolyMesh::teeth()
     int pid[2]= {it->second.p[0],it->second.p[1]};
     Vec3 n1=planes[pid[0]].n, n2=planes[pid[1]].n;
     real_t cosine=n1.dot(n2);
-    real_t chop=0,extend=0;
+    real_t chop=0;
     if(cosine>0) {
       real_t halftan=half_tan(cosine);
       chop=t*halftan*(cosine+0.5);
-      extend=t*halftan*(1+cosine);
     } else {
-      real_t halftan=half_tan(cosine);
+      real_t halftan=half_tan(-cosine);
+      halftan=CLIP_VAL(halftan, min_depth_ratio);
       chop=(t/2)/halftan;
-      extend=chop;
     }
 
     for(int ii=0; ii<2; ii++) {
       Polygon rect;
       chopAlongEdge(it->first, it->second, ii,chop,rect);
       chopPoly(rect, pid[ii]);
+    }
+  }
+
+  for(it=eset.begin(); it!=eset.end(); it++) {
+    if(it->second.hasConn){
+      continue;
+    }
+    int pid[2]= {it->second.p[0],it->second.p[1]};
+    Vec3 n1=planes[pid[0]].n, n2=planes[pid[1]].n;
+    real_t cosine=n1.dot(n2);
+    real_t chop=0,extend=0;
+    if(cosine>0) {
+      real_t halftan=half_tan(cosine);
+      chop=t*halftan*(cosine+0.5);
+      extend=t*halftan*(1+cosine);
+    } else {
+      real_t halftan=half_tan(-cosine);
+      halftan=CLIP_VAL(halftan, min_depth_ratio);
+      chop=(t/2)/halftan;
+      extend=chop;
+    }
+
+    for(int ii=0; ii<2; ii++) {
       Vec3 v0,v1;
       edgeVertPos(it->first, pid[ii],v0,v1);
       Vec3 lineDir = v1-v0;
-      lineDir/=lineDir.norm();
+      real_t len = lineDir.norm();
+      lineDir/=len;
       Vec3 lineNormal=Vec3(lineDir[1],-lineDir[0],0);
       if(ii!=0){
         lineNormal=-lineNormal;
       }
       real_t start=0;
-      real_t len = 0;
       int nteeth=0;
       if(ii!=0){
-        nteeth++;
+        nteeth=1;
       }
-      while(start<len){
-        real_t start = nteeth*teethWidth;
-        Vec3 r0=v0+start*lineDir;
-        r0-=normalOffset*lineNormal;
+      std::vector<Vert>lineseg;
+      poly2vert(poly[pid[ii]][0],lineseg);
+      while(start+teethWidth<len){
+        start = nteeth*teethWidth;
+        Vec3 r0=v0+start*lineDir-chop*lineNormal;
+        r0+=normalOffset*lineNormal;
         std::vector<Vert>rect;
-        make_rect(r0,lineDir,lineNormal,teethWidth,extend,rect);
-        Polygon poly;
-        vert2poly(rect,poly);
-        chopPoly(poly,pid[ii],ClipperLib::ctUnion);
+        make_rect(r0,lineDir,-lineNormal,teethWidth,extend,rect);
+
+        bool valid=true;
+        size_t jj0=lineseg.size()-1;
+        for(size_t jj=0;jj<lineseg.size();jj++){
+          if(  lineIntersect(lineseg[jj0].v,lineseg[jj].v,rect[0].v,rect[1].v)
+             ||lineIntersect(lineseg[jj0].v,lineseg[jj].v,rect[2].v,rect[3].v)){
+            valid=false;
+            goto ENDTEETHCHECK;
+          }
+          jj0=jj;
+        }
+        r0 -= 2*normalOffset*lineNormal;
+        rect.clear();
+        make_rect(r0,lineDir,-lineNormal,teethWidth,extend,rect);
+        if(   pnpoly(lineseg,rect[2])
+           || pnpoly(lineseg,rect[1])
+           ||!pnpoly(lineseg,rect[0])
+           ||!pnpoly(lineseg,rect[3])){
+            valid=false;
+        }
+      ENDTEETHCHECK:
+        if(valid){
+          Polygon p;
+          vert2poly(rect,p);
+          chopPoly(p,pid[ii],ClipperLib::ctUnion);
+        }
         nteeth+=2;
       }
     }
@@ -349,7 +397,7 @@ void PolyMesh::buildEdge() {
   for(; it!=eset.end(); it=nextit) {
     nextit=it;
     nextit++;
-    if(it->second.p[1]<0) {
+    if(it->second.p[1]<0 || it->second.p[0]==it->second.p[1]) {
       eset.erase(it);
     }
     int pid[2]= {it->second.p[0],it->second.p[1]};
@@ -363,7 +411,7 @@ void PolyMesh::buildEdge() {
   }
 }
 
-void make_rect(Vec3 &start, Vec3 & lineDir, Vec3 &normal,
+void make_rect(Vec3 &start, const Vec3 & lineDir, const Vec3 &normal,
                real_t t, real_t len,std::vector<Vert> & rect)
 {
   Vec3 v = start;
@@ -416,9 +464,7 @@ void PolyMesh::slot(real_t frac)
       shift = (t/2)*halftangent;
     } else {
       //acute angle
-      if(halftangent<min_depth_ratio) {
-        halftangent=min_depth_ratio;
-      }
+      halftangent =CLIP_VAL(halftangent , min_depth_ratio);
       shift=(t/2)/halftangent;
     }
 
@@ -455,10 +501,7 @@ void PolyMesh::slot(real_t frac)
           for(size_t seg=0; seg<poly[planeIdx].size(); seg++) {
             Polygon polySeg = poly[planeIdx][seg];
             std::vector<Vert>lineseg;
-            for(size_t kk=0; kk<polySeg.size(); kk++) {
-              lineseg.push_back(Vec3((real_t)polySeg[kk].X,
-                                     (real_t)polySeg[kk].Y,0));
-            }
+            poly2vert(polySeg, lineseg);
             bool ret = pnpoly(lineseg, rect[jj]);
             if(ret!=expected) {
               possible = false;
@@ -533,7 +576,7 @@ Vec3 rotate(const Vec3 & v,real_t cosine)
 
 void PolyMesh::connector()
 {
-  //laser cutter cuts away things
+  //for laser cutter
   //leave a bit extra material for friction fit
   real_t unitlen = unitRatio*t;
   real_t u = unitlen;
@@ -638,9 +681,7 @@ void PolyMesh::zz(real_t _t)
     } else {
       //acute angle
       real_t halftangent = half_tan(std::abs(cosine));
-      if(halftangent<min_depth_ratio) {
-        halftangent=min_depth_ratio;
-      }
+      halftangent =CLIP_VAL(halftangent , min_depth_ratio);
       depth = (t/2)/halftangent;
     }
 
@@ -696,7 +737,7 @@ bool lineIntersect(Vec3 la0,Vec3 la1,Vec3 lb0, Vec3 lb1) {
 void PolyMesh::chopPoly(const Polygon & rect, int pid,ClipperLib::ClipType ct)
 {
   ClipperLib::Clipper c;
-  c.AddPolygons(poly[pid],ClipperLib::ptSubject);
+  c.AddPolygon(poly[pid][0],ClipperLib::ptSubject);
   c.AddPolygon(rect,ClipperLib::ptClip);
   Polygons solution;
   bool ret = c.Execute(ct,solution);
@@ -705,7 +746,7 @@ void PolyMesh::chopPoly(const Polygon & rect, int pid,ClipperLib::ClipType ct)
   } else {
     std::cout<<"plane "<<pid<<"\n";
     std::cout<<"soln size "<<solution.size()<<"\n";
-    poly[pid]=solution;
+    poly[pid][0]=solution[0];
   }
 }
 
@@ -715,4 +756,10 @@ void vert2poly(const std::vector<Vert> & rect, Polygon & p)
     p.push_back(IntPoint((long64)rect[ii].v.get(0),
                         (long64)rect[ii].v.get(1)));
   }
+}
+void poly2vert(const Polygon & polySeg, std::vector<Vert>&lineseg){
+  for(size_t kk=0; kk<polySeg.size(); kk++) {
+              lineseg.push_back(Vec3((real_t)polySeg[kk].X,
+                                     (real_t)polySeg[kk].Y,0));
+            }
 }

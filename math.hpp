@@ -15,7 +15,7 @@ struct Vec3{
   real_t get(int i)const{
     return x[i];
   }
-  Vec3 operator-(Vec3 &a){
+  Vec3 operator-(const Vec3 &a)const{
     return Vec3(x[0]-a.x[0],x[1]-a.x[1],x[2]-a.x[2]);
   }
   Vec3 operator-()const{
