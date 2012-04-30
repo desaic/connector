@@ -21,8 +21,8 @@ real_t unitRatio=2;
 real_t slotUnit=1;
 real_t startRatio=2;
 real_t testExtend=1;
-real_t reserveRatio=0.07;
-real_t extraRatio=0.06;
+real_t reserveRatio=0.05;
+real_t extraRatio=0.12;
 #define CLIP_VAL(x,y) ((x)<(y)?(y):(x))
 void make_rect(Vec3 &start, const Vec3 & lineDir, const Vec3 &normal,
                real_t t, real_t len,std::vector<Vert> & rect);
@@ -86,6 +86,7 @@ void PolyMesh::teeth()
 {
   std::map<Edge,EdgeVal>::iterator it;
   real_t teethWidth = teethRatio*t;
+  real_t extra=t*extraRatio;
   for(it=eset.begin(); it!=eset.end(); it++) {
     if(it->second.hasConn){
       continue;
@@ -126,7 +127,7 @@ void PolyMesh::teeth()
       real_t halftan=half_tan(-cosine);
       halftan=CLIP_VAL(halftan, min_depth_ratio);
       chop=(t/2)/halftan;
-      extend=chop;
+      extend=chop+(t/2)*halftan;
     }
 
     for(int ii=0; ii<2; ii++) {
@@ -164,8 +165,12 @@ void PolyMesh::teeth()
           jj0=jj;
         }
         r0 -= 2*normalOffset*lineNormal;
+        r0-=extra*lineDir;
         rect.clear();
-        make_rect(r0,lineDir,-lineNormal,teethWidth,extend,rect);
+        make_rect(r0,lineDir,-lineNormal,teethWidth+2*extra,extend,rect);
+        rect[1].v+=lineDir*extra/2;
+        rect[2].v-=lineDir*extra/2;
+
         if(   pnpoly(lineseg,rect[2])
            || pnpoly(lineseg,rect[1])
            ||!pnpoly(lineseg,rect[0])
@@ -277,6 +282,9 @@ PolyMesh::PolyMesh(const char * filename):intscale(1),obj_scale(1),
     in>> p.ay[0];
     in>> p.ay[1];
     in>> p.ay[2];
+    in>>p.v0[0];
+    in>>p.v0[1];
+    in>>p.v0[2];
     p.l.resize(nseg);
     for(size_t jj=0; jj<p.l.size(); jj++) {
       //number of points in a segment
@@ -746,7 +754,15 @@ void PolyMesh::chopPoly(const Polygon & rect, int pid,ClipperLib::ClipType ct)
   } else {
     std::cout<<"plane "<<pid<<"\n";
     std::cout<<"soln size "<<solution.size()<<"\n";
-    poly[pid][0]=solution[0];
+    size_t maxsize=solution[0].size();
+    int maxidx=0;
+    for(size_t jj=1;jj<solution.size();jj++){
+      if(solution[jj].size()>maxsize){
+        maxsize=solution[jj].size();
+        maxidx=jj;
+      }
+    }
+    poly[pid][0]=solution[maxidx];
   }
 }
 

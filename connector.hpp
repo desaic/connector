@@ -72,8 +72,8 @@ struct Connector{
 //a plane may have more one line segment if it has holes inside
 class Plane{
 public:
-	//normal  two axis
-	Vec3 n,ax,ay;
+	//normal  two axis  position of the first vertex
+	Vec3 n,ax,ay,v0;
 	//line segments
 	std::vector<std::vector<Vert> >l;
 	std::vector<Vert> &operator[](size_t index){
