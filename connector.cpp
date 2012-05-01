@@ -4,6 +4,8 @@
 #include <set>
 #include <algorithm>
 #include <cmath>
+#include <GL/gl.h>
+#include <GL/glu.h>
 using ClipperLib::long64;
 using ClipperLib::Clipper;
 using ClipperLib::Polygons;
@@ -22,7 +24,7 @@ real_t slotUnit=1;
 real_t startRatio=2;
 real_t testExtend=1;
 real_t reserveRatio=0.05;
-real_t extraRatio=0.12;
+real_t extraRatio=0.08;
 #define CLIP_VAL(x,y) ((x)<(y)?(y):(x))
 void make_rect(Vec3 &start, const Vec3 & lineDir, const Vec3 &normal,
                real_t t, real_t len,std::vector<Vert> & rect);
@@ -598,8 +600,8 @@ void PolyMesh::connector()
     real_t slot_len=it->second.connSize;
     baseShape[0]=Vec3(0,0,0);
     baseShape[1]=Vec3(-u+extra/2,0,0);
-    baseShape[2]=Vec3(-u,-t,0);
-    baseShape[3]=Vec3(-u-slot_len,-t,0);
+    baseShape[2]=Vec3(-u+extra/4,-t,0);
+    baseShape[3]=Vec3(-u-extra/4-slot_len,-t,0);
     baseShape[4]=Vec3(-u-extra/2-slot_len,0,0);
     baseShape[5]=Vec3(-u-extra/2-slot_len,u,0);
 
@@ -764,6 +766,41 @@ void PolyMesh::chopPoly(const Polygon & rect, int pid,ClipperLib::ClipType ct)
     }
     poly[pid][0]=solution[maxidx];
   }
+}
+Vec3 Plane::local2world(const Vec3 & v){
+  //inverse is transpose
+  Vec3 ret = Vec3(v.get(0)*ax[0]+v.get(1)*ay[0]+v.get(2)*n[0],
+                  v.get(0)*ax[1]+v.get(1)*ay[1]+v.get(2)*n[1],
+                  v.get(0)*ax[2]+v.get(1)*ay[2]+v.get(2)*n[2]
+                  );
+  ret+=v0;
+  return ret;
+}
+void PolyMesh::draw()
+{
+  glDisable(GL_LIGHTING);
+  glBegin(GL_LINES);
+  for(size_t ii=0;ii<planes.size();ii++){
+    for(size_t jj=0;jj<planes[ii].size();jj++){
+      std::vector<Vert> & lineseg = planes[ii][jj];
+      size_t kk0=lineseg.size()-1;
+      for(size_t kk=0;kk<lineseg.size();kk++){
+
+        Vec3 v=lineseg[kk0].v;
+        v/=intscale;
+        v=planes[ii].local2world(v);
+        glVertex3f(v[0],v[1],v[2]);
+
+        v=lineseg[kk].v;
+        v/=intscale;
+        v=planes[ii].local2world(v);
+        glVertex3f(v[0],v[1],v[2]);
+        kk0=kk;
+      }
+    }
+  }
+  glEnd();
+  glEnable(GL_LIGHTING);
 }
 
 void vert2poly(const std::vector<Vert> & rect, Polygon & p)

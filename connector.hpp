@@ -74,6 +74,7 @@ class Plane{
 public:
 	//normal  two axis  position of the first vertex
 	Vec3 n,ax,ay,v0;
+	Vec3 local2world(const Vec3& v);
 	//line segments
 	std::vector<std::vector<Vert> >l;
 	std::vector<Vert> &operator[](size_t index){
@@ -110,6 +111,7 @@ public:
   void connector();
   void teeth();
 	void buildEdge();
+	void draw();
 	void edgeVertPos(const Edge &e, int planeIdx, Vec3 &v0,Vec3 & v1);
 	//map from input vertex id to [1..n]
 	std::map<int,int>vid;
