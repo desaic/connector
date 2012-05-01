@@ -116,7 +116,7 @@ public:
 	void zz(real_t t);
 	bool isConvex(const Edge & e, const EdgeVal&ev);
 	void slot(real_t frac);
-  void connector();
+  void connector(const Edge & e,const  EdgeVal & ev,Connector & conn);
   void teeth();
 	void buildEdge();
 	void draw();

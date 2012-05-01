@@ -36,7 +36,7 @@ void PolyMesh::chopAlongEdge(const Edge&e,const EdgeVal & ev, int ii,real_t dept
   int planeIdx = ev.p[ii];
   VertIdx vi0 = vertp[e.id[0]][planeIdx];
   VertIdx vi1 = vertp[e.id[1]][planeIdx];
-  if(ii==1){
+  if(ii==1) {
     vi0= vertp[e.id[1]][planeIdx];
     vi1= vertp[e.id[0]][planeIdx];
   }
@@ -90,7 +90,7 @@ void PolyMesh::teeth()
   real_t teethWidth = teethRatio*t;
   real_t extra=t*extraRatio;
   for(it=eset.begin(); it!=eset.end(); it++) {
-    if(it->second.hasConn){
+    if(it->second.hasConn) {
       continue;
     }
     int pid[2]= {it->second.p[0],it->second.p[1]};
@@ -114,7 +114,7 @@ void PolyMesh::teeth()
   }
 
   for(it=eset.begin(); it!=eset.end(); it++) {
-    if(it->second.hasConn){
+    if(it->second.hasConn) {
       continue;
     }
     int pid[2]= {it->second.p[0],it->second.p[1]};
@@ -139,17 +139,17 @@ void PolyMesh::teeth()
       real_t len = lineDir.norm();
       lineDir/=len;
       Vec3 lineNormal=Vec3(lineDir[1],-lineDir[0],0);
-      if(ii!=0){
+      if(ii!=0) {
         lineNormal=-lineNormal;
       }
       real_t start=0;
       int nteeth=0;
-      if(ii!=0){
+      if(ii!=0) {
         nteeth=1;
       }
       std::vector<Vert>lineseg;
       poly2vert(poly[pid[ii]][0],lineseg);
-      while(start+teethWidth<len){
+      while(start+teethWidth<len) {
         start = nteeth*teethWidth;
         Vec3 r0=v0+start*lineDir-chop*lineNormal;
         r0+=normalOffset*lineNormal;
@@ -158,9 +158,9 @@ void PolyMesh::teeth()
 
         bool valid=true;
         size_t jj0=lineseg.size()-1;
-        for(size_t jj=0;jj<lineseg.size();jj++){
+        for(size_t jj=0; jj<lineseg.size(); jj++) {
           if(  lineIntersect(lineseg[jj0].v,lineseg[jj].v,rect[0].v,rect[1].v)
-             ||lineIntersect(lineseg[jj0].v,lineseg[jj].v,rect[2].v,rect[3].v)){
+               ||lineIntersect(lineseg[jj0].v,lineseg[jj].v,rect[2].v,rect[3].v)) {
             valid=false;
             goto ENDTEETHCHECK;
           }
@@ -174,13 +174,13 @@ void PolyMesh::teeth()
         rect[2].v-=lineDir*extra/2;
 
         if(   pnpoly(lineseg,rect[2])
-           || pnpoly(lineseg,rect[1])
-           ||!pnpoly(lineseg,rect[0])
-           ||!pnpoly(lineseg,rect[3])){
-            valid=false;
+              || pnpoly(lineseg,rect[1])
+              ||!pnpoly(lineseg,rect[0])
+              ||!pnpoly(lineseg,rect[3])) {
+          valid=false;
         }
-      ENDTEETHCHECK:
-        if(valid){
+ENDTEETHCHECK:
+        if(valid) {
           Polygon p;
           vert2poly(rect,p);
           chopPoly(p,pid[ii],ClipperLib::ctUnion);
@@ -459,6 +459,7 @@ void PolyMesh::slot(real_t frac)
     if(it->second.hasConn) {
       continue;
     }
+    Connector conn;
     int pid[2]= {it->second.p[0],it->second.p[1]};
     //if concave shift the slots outwards by (t/2) * or / tan(theta/2);
     //if convex shift inwards
@@ -495,7 +496,7 @@ void PolyMesh::slot(real_t frac)
         real_t len = lineDir.norm();
         lineDir/=len;
         Vec3 lineNormal = Vec3(lineDir[1],-lineDir[0],0);
-        if(ii!=0){
+        if(ii!=0) {
           lineNormal=-lineNormal;
         }
         Vec3 mid=alpha*v0+(1-alpha)*v1;
@@ -558,13 +559,15 @@ ENDEDGELOOP:
         real_t len = lineDir.norm();
         lineDir/=len;
         Vec3 lineNormal = Vec3(lineDir[1],-lineDir[0],0);
-        if(ii!=0){
+        if(ii!=0) {
           lineNormal=-lineNormal;
         }
-        if(ii==0){
+        if(ii==0) {
           it->second.v0=mid;
           it->second.norm=lineNormal;
           it->second.dir=lineDir;
+          connector(it->first, it->second, conn);
+          conns.push_back(conn);
         }
         real_t reserveLen=t*reserveRatio;
         mid+=(-lineNormal*(start+reserveLen+shift));
@@ -588,78 +591,73 @@ Vec3 rotate(const Vec3 & v,real_t cosine)
   return ret;
 }
 
-void PolyMesh::connector()
+void PolyMesh::connector(const  Edge & e, const EdgeVal&ev, Connector & conn)
 {
   //for laser cutter
   //leave a bit extra material for friction fit
   real_t unitlen = unitRatio*t;
   real_t u = unitlen;
-  std::map<Edge,EdgeVal>::iterator it;
   real_t extra=t*extraRatio;
-  for(it = eset.begin(); it!=eset.end(); it++) {
-    if( !it->second.hasConn) {
-      continue;
+  std::vector<Vec3> baseShape(6);
+  real_t slot_len=ev.connSize;
+  baseShape[0]=Vec3(0,0,0);
+  baseShape[1]=Vec3(-u+extra/2,0,0);
+  baseShape[2]=Vec3(-u+extra/4,-t,0);
+  baseShape[3]=Vec3(-u-extra/4-slot_len,-t,0);
+  baseShape[4]=Vec3(-u-extra/2-slot_len,0,0);
+  baseShape[5]=Vec3(-u-extra/2-slot_len,u,0);
+
+  int pid[2]= {ev.p[0],ev.p[1]};
+
+  Vec3 &n1 = planes[pid[0]].n;
+  Vec3 &n2 = planes[pid[1]].n;
+
+  conn.l.insert(conn.l.end(),baseShape.begin(),baseShape.end());
+  conn.pid[0]=pid[0];
+  conn.pid[1]=pid[1];
+  conn.v0=ev.v0;
+  conn.dir=ev.dir;
+  conn.norm=ev.norm;
+
+  real_t cosine=n1.dot(n2);
+  if(isConvex(e,ev)) {
+    std::vector<Vec3>rot(5);
+    real_t halftan=half_tan(-cosine);
+    if(cosine<0 && halftan<0.5) {
+      rot.resize(4);
+      conn.l.resize(5);
     }
-    std::vector<Vec3> baseShape(6);
-    real_t slot_len=it->second.connSize;
-    baseShape[0]=Vec3(0,0,0);
-    baseShape[1]=Vec3(-u+extra/2,0,0);
-    baseShape[2]=Vec3(-u+extra/4,-t,0);
-    baseShape[3]=Vec3(-u-extra/4-slot_len,-t,0);
-    baseShape[4]=Vec3(-u-extra/2-slot_len,0,0);
-    baseShape[5]=Vec3(-u-extra/2-slot_len,u,0);
-
-    int pid[2]= {it->second.p[0],it->second.p[1]};
-
-    Connector conn;
-    Vec3 &n1 = planes[pid[0]].n;
-    Vec3 &n2 = planes[pid[1]].n;
-
-    conn.l.insert(conn.l.end(),baseShape.begin(),baseShape.end());
-    conn.pid[0]=pid[0];
-    conn.pid[1]=pid[1];
-    conn.v0=it->second.v0;
-    real_t cosine=n1.dot(n2);
-    if(isConvex(it->first,it->second)) {
-      std::vector<Vec3>rot(5);
-      real_t halftan=half_tan(-cosine);
-      if(cosine<0 && halftan<0.5){
-        rot.resize(4);
-        conn.l.resize(5);
-      }
-      //convex
-      cosine = -cosine;
-      for(size_t ii=0; ii<rot.size(); ii++) {
-        size_t ri=rot.size()-1-ii;
-        rot[ri]=Vec3(baseShape[ii+1][0],-baseShape[ii+1][1],0);
-        Vec3 tmp = rotate(rot[ri],cosine);
-        rot[ri]=tmp;
-      }
+    //convex
+    cosine = -cosine;
+    for(size_t ii=0; ii<rot.size(); ii++) {
+      size_t ri=rot.size()-1-ii;
+      rot[ri]=Vec3(baseShape[ii+1][0],-baseShape[ii+1][1],0);
+      Vec3 tmp = rotate(rot[ri],cosine);
+      rot[ri]=tmp;
+    }
+    conn.l.insert(conn.l.end(),rot.begin(),rot.end());
+  } else {
+    //concave
+    std::vector<Vec3>rot(5);
+    for(size_t ii=0; ii<rot.size(); ii++) {
+      size_t ri=rot.size()-1-ii;
+      rot[ri]=Vec3(-baseShape[ii+1][0],baseShape[ii+1][1],0);
+      Vec3 tmp = rotate(rot[ri],cosine);
+      rot[ri]=tmp;
+    }
+    if(cosine>0) {
+      real_t halftan=half_tan(cosine);
+      real_t extend=u*halftan;
+      Vec3 exv = Vec3(extend,u,0);
+      conn.l.push_back(exv);
       conn.l.insert(conn.l.end(),rot.begin(),rot.end());
-    } else {
-      //concave
-      std::vector<Vec3>rot(5);
-      for(size_t ii=0; ii<rot.size(); ii++) {
-        size_t ri=rot.size()-1-ii;
-        rot[ri]=Vec3(-baseShape[ii+1][0],baseShape[ii+1][1],0);
-        Vec3 tmp = rotate(rot[ri],cosine);
-        rot[ri]=tmp;
-      }
-      if(cosine>0) {
-        real_t halftan=half_tan(cosine);
-        real_t extend=u*halftan;
-        Vec3 exv = Vec3(extend,u,0);
-        conn.l.push_back(exv);
-        conn.l.insert(conn.l.end(),rot.begin(),rot.end());
-      }
-      else {
-        real_t extend=u;
-        Vec3 exv = Vec3(extend,u,0);
-        conn.l.push_back(exv);
-        conn.l.insert(conn.l.end(),rot.begin(),rot.end());
-      }
     }
-    conns.push_back(conn);
+    else {
+      real_t extend=u;
+      Vec3 exv = Vec3(extend,u,0);
+      conn.l.push_back(exv);
+      conn.l.insert(conn.l.end(),rot.begin(),rot.end());
+    }
   }
 }
 
@@ -767,8 +765,8 @@ void PolyMesh::chopPoly(const Polygon & rect, int pid,ClipperLib::ClipType ct)
     std::cout<<"soln size "<<solution.size()<<"\n";
     size_t maxsize=solution[0].size();
     int maxidx=0;
-    for(size_t jj=1;jj<solution.size();jj++){
-      if(solution[jj].size()>maxsize){
+    for(size_t jj=1; jj<solution.size(); jj++) {
+      if(solution[jj].size()>maxsize) {
         maxsize=solution[jj].size();
         maxidx=jj;
       }
@@ -776,7 +774,7 @@ void PolyMesh::chopPoly(const Polygon & rect, int pid,ClipperLib::ClipType ct)
     poly[pid][0]=solution[maxidx];
   }
 }
-Vec3 Plane::local2world(const Vec3 & v){
+Vec3 Plane::local2world(const Vec3 & v) {
   //inverse is transpose
   Vec3 ret = v.get(0)*ax+v.get(1)*ay+v.get(2)*n;
   ret+=v0;
@@ -786,7 +784,7 @@ Vec3 Plane::local2world(const Vec3 & v){
 Vec3 Connector::local2plane(const Vec3 & v)
 {
   Vec3 n=norm.cross(dir);
-  Vec3 ret = v.get(0)*norm+v.get(1)*n;
+  Vec3 ret = v.get(0)*norm-v.get(1)*n;
   ret+=v0;
   return ret;
 }
@@ -795,11 +793,11 @@ void PolyMesh::draw()
 {
   glDisable(GL_LIGHTING);
   glBegin(GL_LINES);
-  for(size_t ii=0;ii<planes.size();ii++){
-    for(size_t jj=0;jj<planes[ii].size();jj++){
+  for(size_t ii=0; ii<planes.size(); ii++) {
+    for(size_t jj=0; jj<planes[ii].size(); jj++) {
       std::vector<Vert> & lineseg = planes[ii][jj];
       size_t kk0=lineseg.size()-1;
-      for(size_t kk=0;kk<lineseg.size();kk++){
+      for(size_t kk=0; kk<lineseg.size(); kk++) {
 
         Vec3 v=lineseg[kk0].v;
         v/=intscale;
@@ -814,18 +812,18 @@ void PolyMesh::draw()
       }
     }
   }
-  for(size_t ii=0;ii<conns.size();ii++){
+  for(size_t ii=0; ii<conns.size(); ii++) {
     Plane & p = planes[conns[ii].pid[0]];
     size_t jj0=conns[ii].size()-1;
-    for(size_t jj=0;jj<conns[ii].size();jj++){
+    for(size_t jj=0; jj<conns[ii].size(); jj++) {
       Vec3 v=conns[ii][jj];
-    //  v=conns[ii].local2plane(v);
+      v=conns[ii].local2plane(v);
       v/=intscale;
       v=p.local2world(v);
       glVertex3f(v[0],v[1],v[2]);
 
       v=conns[ii][jj0];
-      //v=conns[ii].local2plane(v);
+      v=conns[ii].local2plane(v);
       v/=intscale;
       v=p.local2world(v);
       glVertex3f(v[0],v[1],v[2]);
@@ -839,14 +837,14 @@ void PolyMesh::draw()
 
 void vert2poly(const std::vector<Vert> & rect, Polygon & p)
 {
-  for(size_t ii=0;ii<rect.size();ii++){
+  for(size_t ii=0; ii<rect.size(); ii++) {
     p.push_back(IntPoint((long64)rect[ii].v.get(0),
-                        (long64)rect[ii].v.get(1)));
+                         (long64)rect[ii].v.get(1)));
   }
 }
-void poly2vert(const Polygon & polySeg, std::vector<Vert>&lineseg){
+void poly2vert(const Polygon & polySeg, std::vector<Vert>&lineseg) {
   for(size_t kk=0; kk<polySeg.size(); kk++) {
-              lineseg.push_back(Vec3((real_t)polySeg[kk].X,
-                                     (real_t)polySeg[kk].Y,0));
-            }
+    lineseg.push_back(Vec3((real_t)polySeg[kk].X,
+                           (real_t)polySeg[kk].Y,0));
+  }
 }

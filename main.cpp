@@ -199,7 +199,7 @@ int main(int argc, char * argv[])
 	pm.zz(t);
   pm.slot(1);
   pm.slot(0.5);
-  pm.connector();
+ // pm.connector();
   pm.teeth();
 	pm.save_result("zz.txt");
 	//camera on stack
