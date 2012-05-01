@@ -211,7 +211,7 @@ void PolyMesh::save_result(const char * filename)
     std::cout<<"cannot open file"<<filename<<"\n";
     return;
   }
-  out<<planes.size()+c.size()<<"\n";
+  out<<planes.size()+conns.size()<<"\n";
   for(size_t ii=0; ii<poly.size(); ii++) {
     out<<poly[ii].size()<<"\n";
     if(poly[ii].size()<1) {
@@ -234,12 +234,12 @@ void PolyMesh::save_result(const char * filename)
     out<<"\n";
   }
 
-  for(size_t ii=0; ii<c.size(); ii++) {
-    out<<"1 "<<c[ii].pid[0]<<" "<<c[ii].pid[1]<<"\n";
-    out<<c[ii].l.size()<<"\n";
-    for(size_t jj=0; jj<c[ii].l.size(); jj++) {
-      real_t x = c[ii].l[jj][0];
-      real_t y = c[ii].l[jj][1];
+  for(size_t ii=0; ii<conns.size(); ii++) {
+    out<<"1 "<<conns[ii].pid[0]<<" "<<conns[ii].pid[1]<<"\n";
+    out<<conns[ii].l.size()<<"\n";
+    for(size_t jj=0; jj<conns[ii].l.size(); jj++) {
+      real_t x = conns[ii].l[jj][0];
+      real_t y = conns[ii].l[jj][1];
       x=(x/intscale)*obj_scale;
       y=(y/intscale)*obj_scale;
       out<<x<<","<<y<<" ";
@@ -554,13 +554,17 @@ ENDEDGELOOP:
         Vec3 v0, v1;
         edgeVertPos(it->first, planeIdx, v0,v1);
         Vec3 mid=alpha*v0+(1-alpha)*v1;
-
         Vec3 lineDir=v1-v0;
         real_t len = lineDir.norm();
         lineDir/=len;
         Vec3 lineNormal = Vec3(lineDir[1],-lineDir[0],0);
         if(ii!=0){
           lineNormal=-lineNormal;
+        }
+        if(ii==0){
+          it->second.v0=mid;
+          it->second.norm=lineNormal;
+          it->second.dir=lineDir;
         }
         real_t reserveLen=t*reserveRatio;
         mid+=(-lineNormal*(start+reserveLen+shift));
@@ -614,25 +618,30 @@ void PolyMesh::connector()
     conn.l.insert(conn.l.end(),baseShape.begin(),baseShape.end());
     conn.pid[0]=pid[0];
     conn.pid[1]=pid[1];
-
+    conn.v0=it->second.v0;
     real_t cosine=n1.dot(n2);
     if(isConvex(it->first,it->second)) {
+      std::vector<Vec3>rot(5);
+      real_t halftan=half_tan(-cosine);
+      if(cosine<0 && halftan<0.5){
+        rot.resize(4);
+        conn.l.resize(5);
+      }
       //convex
       cosine = -cosine;
-      std::vector<Vec3>rot(6);
       for(size_t ii=0; ii<rot.size(); ii++) {
         size_t ri=rot.size()-1-ii;
-        rot[ri]=Vec3(baseShape[ii][0],-baseShape[ii][1],0);
+        rot[ri]=Vec3(baseShape[ii+1][0],-baseShape[ii+1][1],0);
         Vec3 tmp = rotate(rot[ri],cosine);
         rot[ri]=tmp;
       }
       conn.l.insert(conn.l.end(),rot.begin(),rot.end());
     } else {
       //concave
-      std::vector<Vec3>rot(6);
+      std::vector<Vec3>rot(5);
       for(size_t ii=0; ii<rot.size(); ii++) {
         size_t ri=rot.size()-1-ii;
-        rot[ri]=Vec3(-baseShape[ii][0],baseShape[ii][1],0);
+        rot[ri]=Vec3(-baseShape[ii+1][0],baseShape[ii+1][1],0);
         Vec3 tmp = rotate(rot[ri],cosine);
         rot[ri]=tmp;
       }
@@ -650,7 +659,7 @@ void PolyMesh::connector()
         conn.l.insert(conn.l.end(),rot.begin(),rot.end());
       }
     }
-    c.push_back(conn);
+    conns.push_back(conn);
   }
 }
 
@@ -769,13 +778,19 @@ void PolyMesh::chopPoly(const Polygon & rect, int pid,ClipperLib::ClipType ct)
 }
 Vec3 Plane::local2world(const Vec3 & v){
   //inverse is transpose
-  Vec3 ret = Vec3(v.get(0)*ax[0]+v.get(1)*ay[0]+v.get(2)*n[0],
-                  v.get(0)*ax[1]+v.get(1)*ay[1]+v.get(2)*n[1],
-                  v.get(0)*ax[2]+v.get(1)*ay[2]+v.get(2)*n[2]
-                  );
+  Vec3 ret = v.get(0)*ax+v.get(1)*ay+v.get(2)*n;
   ret+=v0;
   return ret;
 }
+
+Vec3 Connector::local2plane(const Vec3 & v)
+{
+  Vec3 n=norm.cross(dir);
+  Vec3 ret = v.get(0)*norm+v.get(1)*n;
+  ret+=v0;
+  return ret;
+}
+
 void PolyMesh::draw()
 {
   glDisable(GL_LIGHTING);
@@ -797,6 +812,25 @@ void PolyMesh::draw()
         glVertex3f(v[0],v[1],v[2]);
         kk0=kk;
       }
+    }
+  }
+  for(size_t ii=0;ii<conns.size();ii++){
+    Plane & p = planes[conns[ii].pid[0]];
+    size_t jj0=conns[ii].size()-1;
+    for(size_t jj=0;jj<conns[ii].size();jj++){
+      Vec3 v=conns[ii][jj];
+    //  v=conns[ii].local2plane(v);
+      v/=intscale;
+      v=p.local2world(v);
+      glVertex3f(v[0],v[1],v[2]);
+
+      v=conns[ii][jj0];
+      //v=conns[ii].local2plane(v);
+      v/=intscale;
+      v=p.local2world(v);
+      glVertex3f(v[0],v[1],v[2]);
+
+      jj0=jj;
     }
   }
   glEnd();

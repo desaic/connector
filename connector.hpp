@@ -13,7 +13,6 @@ using ClipperLib::Polygon;
 struct Vert{
 	int id;
 	Vec3 v;
-
 	Vert(const Vec3 & _v=Vec3(0,0,0) ,int _id=0):id(_id),v(_v){}
   real_t operator[](size_t i){return v[i];}
 };
@@ -59,6 +58,7 @@ struct EdgeVal{
 	//two planes may share more than one edge if there is a hole between the two planes
 	int p[2];
   bool hasConn;
+  Vec3 v0, norm,dir;
   real_t connSize;
   EdgeVal():hasConn(false){
   }
@@ -67,6 +67,15 @@ struct EdgeVal{
 struct Connector{
   std::vector<Vec3>l;
   int pid[2];
+  /**@brief point attached to pid[0]*/
+  Vec3 v0, norm,dir;
+  Vec3 local2plane(const Vec3 & v);
+  size_t size(){
+    return l.size();
+  }
+  Vec3 & operator [] (int idx){
+    return l[idx];
+  }
 };
 
 //a plane may have more one line segment if it has holes inside
@@ -101,7 +110,6 @@ public:
 	maps from vertex indices to indices into planes
 	*/
 	std::vector<std::map<int, VertIdx> > vertp;
-  std::vector<Connector>c;
 
 	void scale (real_t s);
 	/**@param t thickness*/
