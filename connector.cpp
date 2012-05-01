@@ -262,7 +262,6 @@ PolyMesh::PolyMesh(const char * filename):intscale(1),obj_scale(1),
   size_t nplane=0;
   in>>nplane;
 
-
   int nvert=0;
   int pcnt=0;
   for(size_t ii=0; ii<nplane; ii++) {
@@ -288,17 +287,20 @@ PolyMesh::PolyMesh(const char * filename):intscale(1),obj_scale(1),
     in>>p.v0[1];
     in>>p.v0[2];
     p.l.resize(nseg);
+    p.world_p.resize(nseg);
     for(size_t jj=0; jj<p.l.size(); jj++) {
       //number of points in a segment
       int npt = 0;
       in >> npt;
       p[jj].resize(npt);
+      p.world_p[jj].resize(npt);
       for(size_t kk=0; kk<p[jj].size(); kk++) {
         in >> p[jj][kk].v[0];
         char c;
         //comma;
         in >>c;
         in >> p[jj][kk].v[1];
+        p.world_p[jj][kk]=p.local2world(p[jj][kk].v);
       }
       for(size_t kk=0; kk<p[jj].size(); kk++) {
         int id;
@@ -447,6 +449,59 @@ void PolyMesh::edgeVertPos(const Edge &e, int planeIdx, Vec3 &v0,Vec3 & v1)
   v1  = lineseg[vi1.k].v;
 }
 
+bool PolyMesh::linePlaneInter(Plane & p, const Vec3& v0, const Vec3& v1)
+{
+  bool expected=true;
+  //thickness is considered
+  real_t real_thick=t/intscale;
+  real_t d=p.n.dot(p.v0-p.n*real_thick);
+
+  real_t d1=v0.dot(p.n);
+  real_t d2=v0.dot(p.n);
+  Vec3 testPt;
+  if(d1*d2>0){
+    return false;
+  }
+  if(std::abs(d1-d2)<0.000001){
+    //doesn't matter for this particular application because
+    //other edges of the connector will intersect anyways.
+    testPt=v0;
+  }else{
+    real_t alpha=(d-d2)/(d1-d2);
+    testPt = alpha*v0+(1-alpha)*v1;
+  }
+  testPt-=p.v0;
+  testPt=Vec3(testPt.dot(p.ax),testPt.dot(p.ay),0);
+  testPt*=intscale;
+  Vert testV(testPt,0);
+  for(size_t ii=0;ii<p.size();ii++){
+    bool result=pnpoly(p[ii],testV);
+    if(result!=expected){
+      return false;
+    }
+    expected=false;
+  }
+  return true;
+}
+
+bool PolyMesh::intersect(const Connector & conn)
+{
+  for(size_t ii=0;ii<planes.size();ii++){
+    if((int)ii==conn.pid[0]||(int)ii==conn.pid[1]){
+      continue;
+    }
+    size_t jj0=conn.size()-1;
+    for(size_t jj=0;jj<conn.size();jj++){
+      Vec3 v0=conn.world[jj];
+      Vec3 v1=conn.world[jj0];
+      if(linePlaneInter(planes[ii],v0,v1)){
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 void PolyMesh::slot(real_t frac)
 {
   std::map<Edge,EdgeVal>::iterator it;
@@ -501,6 +556,17 @@ void PolyMesh::slot(real_t frac)
         }
         Vec3 mid=alpha*v0+(1-alpha)*v1;
         mid-=lineNormal*(shift+start);
+        if(ii==0){
+          it->second.v0=mid;
+          it->second.norm=lineNormal;
+          it->second.dir=lineDir;
+          it->second.connSize=slot_len;
+          connector(it->first, it->second, conn);
+          if(intersect(conn)){
+            possible=false;
+            goto ENDEDGELOOP;
+          }
+        }
         mid-=lineDir*(testLen+t)/2;
         std::vector<Vert>rect;
 
@@ -549,7 +615,7 @@ ENDEDGELOOP:
 
     if(possible) {
       it->second.hasConn=true;
-      it->second.connSize=slot_len;
+      conns.push_back(conn);
       for(size_t ii=0; ii<2; ii++) {
         int planeIdx = pid[ii];
         Vec3 v0, v1;
@@ -562,13 +628,7 @@ ENDEDGELOOP:
         if(ii!=0) {
           lineNormal=-lineNormal;
         }
-        if(ii==0) {
-          it->second.v0=mid;
-          it->second.norm=lineNormal;
-          it->second.dir=lineDir;
-          connector(it->first, it->second, conn);
-          conns.push_back(conn);
-        }
+
         real_t reserveLen=t*reserveRatio;
         mid+=(-lineNormal*(start+reserveLen+shift));
         mid-=lineDir*(t)/2;
@@ -658,6 +718,16 @@ void PolyMesh::connector(const  Edge & e, const EdgeVal&ev, Connector & conn)
       conn.l.push_back(exv);
       conn.l.insert(conn.l.end(),rot.begin(),rot.end());
     }
+  }
+
+  conn.world.resize(conn.size());
+  for(size_t ii=0;ii<conn.size();ii++){
+    Vec3 v0=conn[ii];
+    v0=conn.local2plane(v0);
+    v0[2] -= t/2;
+    v0/=intscale;
+    v0=planes[pid[0]].local2world(v0);
+    conn.world[ii]=v0;
   }
 }
 
@@ -784,7 +854,8 @@ Vec3 Plane::local2world(const Vec3 & v) {
 Vec3 Connector::local2plane(const Vec3 & v)
 {
   Vec3 n=norm.cross(dir);
-  Vec3 ret = v.get(0)*norm-v.get(1)*n;
+  Vec3 ret=v-l[1];
+  ret = ret.get(0)*norm-ret.get(1)*n;
   ret+=v0;
   return ret;
 }
@@ -794,40 +865,25 @@ void PolyMesh::draw()
   glDisable(GL_LIGHTING);
   glBegin(GL_LINES);
   for(size_t ii=0; ii<planes.size(); ii++) {
-    for(size_t jj=0; jj<planes[ii].size(); jj++) {
-      std::vector<Vert> & lineseg = planes[ii][jj];
+    for(size_t jj=0; jj<planes[ii].world_p.size(); jj++) {
+      std::vector<Vec3> & lineseg = planes[ii].world_p[jj];
       size_t kk0=lineseg.size()-1;
       for(size_t kk=0; kk<lineseg.size(); kk++) {
-
-        Vec3 v=lineseg[kk0].v;
-        v/=intscale;
-        v=planes[ii].local2world(v);
+        Vec3 v=lineseg[kk0];
         glVertex3f(v[0],v[1],v[2]);
-
-        v=lineseg[kk].v;
-        v/=intscale;
-        v=planes[ii].local2world(v);
+        v=lineseg[kk];
         glVertex3f(v[0],v[1],v[2]);
         kk0=kk;
       }
     }
   }
   for(size_t ii=0; ii<conns.size(); ii++) {
-    Plane & p = planes[conns[ii].pid[0]];
     size_t jj0=conns[ii].size()-1;
     for(size_t jj=0; jj<conns[ii].size(); jj++) {
-      Vec3 v=conns[ii][jj];
-      v=conns[ii].local2plane(v);
-      v/=intscale;
-      v=p.local2world(v);
+      Vec3 v=conns[ii].world[jj];
       glVertex3f(v[0],v[1],v[2]);
-
-      v=conns[ii][jj0];
-      v=conns[ii].local2plane(v);
-      v/=intscale;
-      v=p.local2world(v);
+      v=conns[ii].world[jj0];
       glVertex3f(v[0],v[1],v[2]);
-
       jj0=jj;
     }
   }

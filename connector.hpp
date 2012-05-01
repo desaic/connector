@@ -66,14 +66,18 @@ struct EdgeVal{
 
 struct Connector{
   std::vector<Vec3>l;
+  std::vector<Vec3>world;
   int pid[2];
   /**@brief point attached to pid[0]*/
   Vec3 v0, norm,dir;
   Vec3 local2plane(const Vec3 & v);
-  size_t size(){
+  size_t size()const {
     return l.size();
   }
   Vec3 & operator [] (int idx){
+    return l[idx];
+  }
+  Vec3 operator [] (int idx)const {
     return l[idx];
   }
 };
@@ -86,10 +90,12 @@ public:
 	Vec3 local2world(const Vec3& v);
 	//line segments
 	std::vector<std::vector<Vert> >l;
+	//planes in world coordinates
+	std::vector<std::vector<Vec3> >world_p;
 	std::vector<Vert> &operator[](size_t index){
 		return l[index];
 	};
-	size_t size(){
+	size_t size()const{
 		return l.size();
 	}
 
@@ -99,6 +105,7 @@ using ClipperLib::Polygons;
 class PolyMesh{
 public:
 	std::vector<Plane>planes;
+
 	std::vector<Polygons>poly;
 	PolyMesh(const char * filename);
 	std::map<Edge,EdgeVal> eset;
@@ -117,6 +124,8 @@ public:
 	bool isConvex(const Edge & e, const EdgeVal&ev);
 	void slot(real_t frac);
   void connector(const Edge & e,const  EdgeVal & ev,Connector & conn);
+  bool intersect(const Connector & conn);
+  bool linePlaneInter(Plane & p, const Vec3& v0, const Vec3& v1);
   void teeth();
 	void buildEdge();
 	void draw();
