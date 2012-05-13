@@ -5,7 +5,7 @@
 #include "connector.hpp"
 #define INT_SCALE 1000000
 real_t size = 12; //inches
-real_t t=0.0012;//thickness
+real_t t=0.12;//thickness
 
 static PolyMesh * m;
 //static Poly * p;

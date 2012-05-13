@@ -137,9 +137,13 @@ public:
   void chopAlongEdge(const Edge&e, const EdgeVal & ev, int ii,real_t depth,  Polygon & rect);
   void chopPoly(const Polygon & poly, int pid, ClipperLib::ClipType ct=ClipperLib::ctDifference);
   /**@param len length to chop away on each piece
-
   */
-  void chopLen(const Edge&e, const EdgeVal & ev, real_t & len1, real_t & len2);
+  void chopLen(const Edge&e, const EdgeVal & ev, real_t * len);
+
+  /**@param len length to chop away on each piece
+  */
+  void shiftLen(const Edge&e, const EdgeVal & ev, real_t * len);
+  void connShift(const Edge&e, const EdgeVal & ev, real_t * shift);
 };
 
 template<class T>

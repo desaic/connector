@@ -503,6 +503,30 @@ bool PolyMesh::intersect(const Connector & conn)
   return false;
 }
 
+void PolyMesh::shiftLen(const Edge&e, const EdgeVal & ev, real_t * shift)
+{
+  shift[0]=0;
+  shift[1]=0;
+  if(!isConvex(e, ev)){
+    return;
+  }
+  int pid[2]= {ev.p[0],ev.p[1]};
+  Vec3 &n1=planes[pid[0]].n;
+  Vec3 &n2 = planes[pid[1]].n;
+  real_t cosine = n1.dot(n2);
+  real_t chop[2];
+  chopLen(e,ev,chop);
+  if(cosine>0){
+    shift[0]=chop[0];
+    real_t halftan=half_tan(cosine);
+    shift[1]=t*halftan;
+  }else{
+    //both shift by the amount chopped away on the first piece
+    shift[0]=chop[0];
+    shift[1]=chop[0];
+  }
+}
+
 void PolyMesh::slot(real_t frac)
 {
   std::map<Edge,EdgeVal>::iterator it;
@@ -517,28 +541,17 @@ void PolyMesh::slot(real_t frac)
     }
     Connector conn;
     int pid[2]= {it->second.p[0],it->second.p[1]};
-    //if concave shift the slots outwards by (t/2) * or / tan(theta/2);
-    //if convex shift inwards
-    //positive value for shifting inwards
-    real_t shift =0;
     Vec3 &n1=planes[pid[0]].n;
     Vec3 &n2 = planes[pid[1]].n;
 
     real_t cosine = n1.dot(n2);
-    real_t halftangent = half_tan(std::abs(cosine));
-    if(cosine>0) {
-      //obtuse angle
-      shift = (t/2)*halftangent;
-    } else {
-      //acute angle
-      halftangent =CLIP_VAL(halftangent , min_depth_ratio);
-      shift=(t/2)/halftangent;
+    if( (!isConvex(it->first, it->second)) &&
+        cosine<0){
+      std::cout<<"impossible\n";
+      continue;
     }
-
-    if(!isConvex(it->first, it->second)) {
-      //concave
-      shift=-shift;
-    }
+    real_t shift[2];
+    shiftLen(it->first, it->second, shift);
     bool possible = true;
     real_t alpha=1.0/(spots+1);
     for(int spot=1; spot<=spots; spot++) {
@@ -556,7 +569,7 @@ void PolyMesh::slot(real_t frac)
           lineNormal=-lineNormal;
         }
         Vec3 mid=alpha*v0+(1-alpha)*v1;
-        mid-=lineNormal*(shift+start);
+        mid-=lineNormal*(shift[ii]+start);
         if(ii==0){
           it->second.v0=mid;
           it->second.norm=lineNormal;
@@ -571,7 +584,6 @@ void PolyMesh::slot(real_t frac)
         }
         mid-=lineDir*(testLen+t)/2;
         std::vector<Vert>rect;
-
         make_rect(mid,lineDir,lineNormal,t+testLen,
                   slot_len+testLen, rect);
         size_t jj0=rect.size()-1;
@@ -632,7 +644,7 @@ ENDEDGELOOP:
         }
 
         real_t reserveLen=t*reserveRatio;
-        mid+=(-lineNormal*(start+reserveLen+shift));
+        mid+=(-lineNormal*(start+reserveLen+shift[ii]));
         mid-=lineDir*(t)/2;
         std::vector<Vert> rect;
         make_rect(mid, lineDir, lineNormal,t,slot_len-2*reserveLen,rect);
@@ -653,6 +665,31 @@ Vec3 rotate(const Vec3 & v,real_t cosine)
   return ret;
 }
 
+void PolyMesh::connShift(const Edge&e, const EdgeVal & ev, real_t * shift)
+{
+  shift[0]=0;
+  shift[1]=0;
+  int pid[2]= {ev.p[0],ev.p[1]};
+  Vec3 n1 = planes[pid[0]].n;
+  Vec3 n2 = planes[pid[1]].n;
+  real_t cosine=n1.dot(n2);
+  if(isConvex(e,ev))
+  {
+    if(cosine<0){
+      return;
+    }
+    else{
+      real_t halftan=half_tan(cosine);
+      shift[0]=t*halftan*cosine;
+    }
+  }else{
+    cosine=std::abs(cosine);
+    real_t halftan=half_tan(cosine);
+    shift[0]=t*halftan;
+    shift[1]=shift[0];
+  }
+}
+
 void PolyMesh::connector(const  Edge & e, const EdgeVal&ev, Connector & conn)
 {
   //for laser cutter
@@ -668,12 +705,18 @@ void PolyMesh::connector(const  Edge & e, const EdgeVal&ev, Connector & conn)
   baseShape[3]=Vec3(-u-extra/4-slot_len,-t,0);
   baseShape[4]=Vec3(-u-extra/2-slot_len,0,0);
   baseShape[5]=Vec3(-u-extra/2-slot_len,u,0);
-
+  std::vector<Vec3> baseCopy(baseShape);
   int pid[2]= {ev.p[0],ev.p[1]};
 
   Vec3 &n1 = planes[pid[0]].n;
   Vec3 &n2 = planes[pid[1]].n;
 
+  real_t shift[2];
+  connShift(e, ev, shift);
+  for(size_t ii=1;ii<baseShape.size();ii++){
+    baseShape[ii]-=shift[0];
+    baseCopy[ii]-=shift[1];
+  }
   conn.l.insert(conn.l.end(),baseShape.begin(),baseShape.end());
   conn.pid[0]=pid[0];
   conn.pid[1]=pid[1];
@@ -693,17 +736,18 @@ void PolyMesh::connector(const  Edge & e, const EdgeVal&ev, Connector & conn)
     cosine = -cosine;
     for(size_t ii=0; ii<rot.size(); ii++) {
       size_t ri=rot.size()-1-ii;
-      rot[ri]=Vec3(baseShape[ii+1][0],-baseShape[ii+1][1],0);
+      rot[ri]=Vec3(baseCopy[ii+1][0],-baseCopy[ii+1][1],0);
       Vec3 tmp = rotate(rot[ri],cosine);
       rot[ri]=tmp;
     }
     conn.l.insert(conn.l.end(),rot.begin(),rot.end());
-  } else {
+  }
+  else {
     //concave
     std::vector<Vec3>rot(5);
     for(size_t ii=0; ii<rot.size(); ii++) {
       size_t ri=rot.size()-1-ii;
-      rot[ri]=Vec3(-baseShape[ii+1][0],baseShape[ii+1][1],0);
+      rot[ri]=Vec3(-baseCopy[ii+1][0],baseCopy[ii+1][1],0);
       Vec3 tmp = rotate(rot[ri],cosine);
       rot[ri]=tmp;
     }
@@ -715,6 +759,7 @@ void PolyMesh::connector(const  Edge & e, const EdgeVal&ev, Connector & conn)
       conn.l.insert(conn.l.end(),rot.begin(),rot.end());
     }
     else {
+      //this case should not happen
       real_t extend=u;
       Vec3 exv = Vec3(extend,u,0);
       conn.l.push_back(exv);
@@ -762,34 +807,22 @@ void PolyMesh::zz(real_t _t)
     }
   }
   for(it=eset.begin(); it!=eset.end(); it++) {
-    real_t depth=0;
+    real_t len[2];
     int pid[2]= {it->second.p[0],it->second.p[1]};
-    Vec3 n1=planes[pid[0]].n, n2=planes[pid[1]].n;
-    real_t cosine=n1.dot(n2);
-    if(cosine>=0) {
-      //obtuse angle
-      depth = std::sqrt(1-cosine*cosine)*t/2;
-    } else {
-      //acute angle
-      real_t halftangent = half_tan(std::abs(cosine));
-      halftangent =CLIP_VAL(halftangent , min_depth_ratio);
-      depth = (t/2)/halftangent;
-    }
-
-    if(depth<1) {
-      continue;
-    }
-    for(size_t ii=0; ii<1; ii++) {
+    chopLen(it->first,it->second, len);
+    for(size_t ii=0; ii<2; ii++) {
       Polygon rect;
-      chopAlongEdge(it->first,it->second, ii,depth, rect);
-      chopPoly(rect,pid[ii]);
+      if(len[ii]>0){
+        chopAlongEdge(it->first,it->second, ii,len[ii], rect);
+        chopPoly(rect,pid[ii]);
+      }
     }
   }
 }
-void PolyMesh::chopLen(const Edge&e, const EdgeVal & ev, real_t & len1, real_t & len2)
+void PolyMesh::chopLen(const Edge&e, const EdgeVal & ev, real_t * len)
 {
-  len1=0;
-  len2=0;
+  len[0]=0;
+  len[1]=0;
   if(!isConvex(e,ev)){
     //no need to chop anything if concave
     return;
@@ -801,7 +834,7 @@ void PolyMesh::chopLen(const Edge&e, const EdgeVal & ev, real_t & len1, real_t &
 
   if(cosine>0){
     real_t sine=std::sqrt(1-cosine*cosine);
-    len1=t*sine;
+    len[0]=t*sine;
   }else if(cosine<0){
     cosine=-cosine;
     real_t sine=std::sqrt(1-cosine*cosine);
@@ -809,7 +842,8 @@ void PolyMesh::chopLen(const Edge&e, const EdgeVal & ev, real_t & len1, real_t &
     tangent=CLIP_VAL(tangent, min_depth_ratio);
     real_t halftan = half_tan(cosine);
     halftan=CLIP_VAL(halftan, min_depth_ratio);
-
+    len[0]=t/halftan;
+    len[1]=t/tangent;
   }
 
 }
