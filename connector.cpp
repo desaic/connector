@@ -82,6 +82,28 @@ void PolyMesh::chopAlongEdge(const Edge&e,const EdgeVal & ev, int ii,real_t dept
   rect.push_back(IntPoint((long64)tv1[0],(long64)tv1[1]));
 }
 
+real_t PolyMesh::teethLen(const Edge&e, const EdgeVal & ev)
+{
+  int pid[2]= {ev.p[0],ev.p[1]};
+  Vec3 n1 = planes[pid[0]].n;
+  Vec3 n2 = planes[pid[1]].n;
+  real_t cosine = n1.dot(n2);
+  real_t teethlen=0;
+  if(cosine>0){
+    real_t sine=std::sqrt(1-cosine*cosine);
+    teethlen = t*sine;
+  }else {
+    cosine=-cosine;
+    real_t sine=std::sqrt(1-cosine*cosine);
+    real_t tangent=sine/cosine;
+   // tangent=CLIP_VAL(tangent, min_depth_ratio);
+    real_t halftan = half_tan(cosine);
+  //  halftan=CLIP_VAL(halftan, min_depth_ratio);
+    teethlen=t*(1/halftan-1/tangent);
+  }
+  return teethlen;
+}
+
 /**@brief 1.chop away both sides
 2. add teeth
 */
@@ -94,22 +116,12 @@ void PolyMesh::teeth()
     if(it->second.hasConn) {
       continue;
     }
-    int pid[2]= {it->second.p[0],it->second.p[1]};
-    Vec3 n1=planes[pid[0]].n, n2=planes[pid[1]].n;
-    real_t cosine=n1.dot(n2);
-    real_t chop=0;
-    if(cosine>0) {
-      real_t halftan=half_tan(cosine);
-      chop=t*halftan*(cosine+0.5);
-    } else {
-      real_t halftan=half_tan(-cosine);
-      halftan=CLIP_VAL(halftan, min_depth_ratio);
-      chop=(t/2)/halftan;
-    }
-
+    real_t chop[2];
+    chopLen(it->first, it->second, chop);
+    int pid[2]={it->second.p[0],it->second.p[1]};
     for(int ii=0; ii<2; ii++) {
       Polygon rect;
-      chopAlongEdge(it->first, it->second, ii,chop,rect);
+      chopAlongEdge(it->first, it->second, ii,chop[ii],rect);
       chopPoly(rect, pid[ii]);
     }
   }
@@ -119,20 +131,9 @@ void PolyMesh::teeth()
       continue;
     }
     int pid[2]= {it->second.p[0],it->second.p[1]};
-    Vec3 n1=planes[pid[0]].n, n2=planes[pid[1]].n;
-    real_t cosine=n1.dot(n2);
-    real_t chop=0,extend=0;
-    if(cosine>0) {
-      real_t halftan=half_tan(cosine);
-      chop=t*halftan*(cosine+0.5);
-      extend=t*halftan*(1+cosine);
-    } else {
-      real_t halftan=half_tan(-cosine);
-      halftan=CLIP_VAL(halftan, min_depth_ratio);
-      chop=(t/2)/halftan;
-      extend=chop+(t/2)*halftan;
-    }
-
+    real_t chop[2];
+    chopLen(it->first, it->second, chop);
+    real_t teethlen=teethLen(it->first, it->second);
     for(int ii=0; ii<2; ii++) {
       Vec3 v0,v1;
       edgeVertPos(it->first, pid[ii],v0,v1);
@@ -152,10 +153,10 @@ void PolyMesh::teeth()
       poly2vert(poly[pid[ii]][0],lineseg);
       while(start+teethWidth<len) {
         start = nteeth*teethWidth;
-        Vec3 r0=v0+start*lineDir-chop*lineNormal;
+        Vec3 r0=v0+start*lineDir-chop[ii]*lineNormal;
         r0+=normalOffset*lineNormal;
         std::vector<Vert>rect;
-        make_rect(r0,lineDir,-lineNormal,teethWidth,extend,rect);
+        make_rect(r0,lineDir,-lineNormal,teethWidth,teethlen,rect);
 
         bool valid=true;
         size_t jj0=lineseg.size()-1;
@@ -170,7 +171,7 @@ void PolyMesh::teeth()
         r0 -= 2*normalOffset*lineNormal;
         r0-=extra*lineDir;
         rect.clear();
-        make_rect(r0,lineDir,-lineNormal,teethWidth+2*extra,extend,rect);
+        make_rect(r0,lineDir,-lineNormal,teethWidth+2*extra,teethlen,rect);
         rect[1].v+=lineDir*extra/2;
         rect[2].v-=lineDir*extra/2;
 

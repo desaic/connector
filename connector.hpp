@@ -144,6 +144,7 @@ public:
   */
   void shiftLen(const Edge&e, const EdgeVal & ev, real_t * len);
   void connShift(const Edge&e, const EdgeVal & ev, real_t * shift);
+  real_t teethLen(const Edge&e, const EdgeVal & ev);
 };
 
 template<class T>
