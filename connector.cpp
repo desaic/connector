@@ -13,7 +13,7 @@ using ClipperLib::Polygon;
 using ClipperLib::IntPoint;
 #define PI 3.1415926
 real_t teethRatio=1;
-real_t min_depth_ratio=0.2;
+real_t min_depth_ratio=0.02;
 
 /**@brief
 offset a little so that tv0 is not exactly on the line
@@ -24,7 +24,8 @@ real_t slotUnit=1;
 real_t startRatio=2;
 real_t testExtend=1;
 real_t reserveRatio=0.05;
-real_t extraRatio=0.08;
+real_t extraRatio=0.1;
+real_t teethExtraRatio=0.055;
 #define CLIP_VAL(x,y) ((x)<(y)?(y):(x))
 void make_rect(Vec3 &start, const Vec3 & lineDir, const Vec3 &normal,
                real_t t, real_t len,std::vector<Vert> & rect);
@@ -88,7 +89,7 @@ void PolyMesh::teeth()
 {
   std::map<Edge,EdgeVal>::iterator it;
   real_t teethWidth = teethRatio*t;
-  real_t extra=t*extraRatio;
+  real_t extra=t*teethExtraRatio;
   for(it=eset.begin(); it!=eset.end(); it++) {
     if(it->second.hasConn) {
       continue;
@@ -561,6 +562,7 @@ void PolyMesh::slot(real_t frac)
           it->second.norm=lineNormal;
           it->second.dir=lineDir;
           it->second.connSize=slot_len;
+          conn=Connector();
           connector(it->first, it->second, conn);
           if(intersect(conn)){
             possible=false;
@@ -719,7 +721,9 @@ void PolyMesh::connector(const  Edge & e, const EdgeVal&ev, Connector & conn)
       conn.l.insert(conn.l.end(),rot.begin(),rot.end());
     }
   }
-
+  if(conn.l.size()>13){
+    std::cout<<"wtf\n";
+  }
   conn.world.resize(conn.size());
   for(size_t ii=0;ii<conn.size();ii++){
     Vec3 v0=conn[ii];
@@ -782,7 +786,33 @@ void PolyMesh::zz(real_t _t)
     }
   }
 }
+void PolyMesh::chopLen(const Edge&e, const EdgeVal & ev, real_t & len1, real_t & len2)
+{
+  len1=0;
+  len2=0;
+  if(!isConvex(e,ev)){
+    //no need to chop anything if concave
+    return;
+  }
+  int pid[2]= {ev.p[0],ev.p[1]};
+  Vec3 n1 = planes[pid[0]].n;
+  Vec3 n2 = planes[pid[1]].n;
+  real_t cosine=n1.dot(n2);
 
+  if(cosine>0){
+    real_t sine=std::sqrt(1-cosine*cosine);
+    len1=t*sine;
+  }else if(cosine<0){
+    cosine=-cosine;
+    real_t sine=std::sqrt(1-cosine*cosine);
+    real_t tangent=sine/cosine;
+    tangent=CLIP_VAL(tangent, min_depth_ratio);
+    real_t halftan = half_tan(cosine);
+    halftan=CLIP_VAL(halftan, min_depth_ratio);
+
+  }
+
+}
 bool PolyMesh::isConvex(const Edge & e, const EdgeVal&ev)
 {
   int pid[2]= {ev.p[0],ev.p[1]};

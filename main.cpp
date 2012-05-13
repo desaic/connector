@@ -5,7 +5,7 @@
 #include "connector.hpp"
 #define INT_SCALE 1000000
 real_t size = 12; //inches
-real_t t=0.12;//thickness
+real_t t=0.0012;//thickness
 
 static PolyMesh * m;
 //static Poly * p;
@@ -173,7 +173,7 @@ void mouse(int button, int state, int x, int y)
 int main(int argc, char * argv[])
 {
   const char * filename = "bunny25.txt";
-  size=8;
+  size=10;
   if(argc>1){
     filename=argv[1];
   }
