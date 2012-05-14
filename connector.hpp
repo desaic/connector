@@ -138,7 +138,7 @@ public:
   void chopPoly(const Polygon & poly, int pid, ClipperLib::ClipType ct=ClipperLib::ctDifference);
   /**@param len length to chop away on each piece
   */
-  void chopLen(const Edge&e, const EdgeVal & ev, real_t * len);
+  void chopLen(const Edge&e, const EdgeVal & ev, real_t * len, bool forteeth=false);
 
   /**@param len length to chop away on each piece
   */

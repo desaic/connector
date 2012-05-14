@@ -24,8 +24,8 @@ real_t slotUnit=1;
 real_t startRatio=2;
 real_t testExtend=1;
 real_t reserveRatio=0.05;
-real_t extraRatio=0.1;
-real_t teethExtraRatio=0.055;
+real_t extraRatio=0.12;
+real_t teethExtraRatio=0.04;
 #define CLIP_VAL(x,y) ((x)<(y)?(y):(x))
 void make_rect(Vec3 &start, const Vec3 & lineDir, const Vec3 &normal,
                real_t t, real_t len,std::vector<Vert> & rect);
@@ -90,8 +90,13 @@ real_t PolyMesh::teethLen(const Edge&e, const EdgeVal & ev)
   real_t cosine = n1.dot(n2);
   real_t teethlen=0;
   if(cosine>0){
-    real_t sine=std::sqrt(1-cosine*cosine);
-    teethlen = t*sine;
+    if(isConvex(e,ev)){
+      real_t sine=std::sqrt(1-cosine*cosine);
+      teethlen = t*sine;
+    }else{
+      real_t halftan = half_tan(cosine);
+      teethlen=t*halftan;
+    }
   }else {
     cosine=-cosine;
     real_t sine=std::sqrt(1-cosine*cosine);
@@ -117,11 +122,11 @@ void PolyMesh::teeth()
       continue;
     }
     real_t chop[2];
-    chopLen(it->first, it->second, chop);
+    chopLen(it->first, it->second, chop,true);
     int pid[2]={it->second.p[0],it->second.p[1]};
     for(int ii=0; ii<2; ii++) {
       Polygon rect;
-      chopAlongEdge(it->first, it->second, ii,chop[ii],rect);
+      chopAlongEdge(it->first, it->second, ii,chop[0],rect);
       chopPoly(rect, pid[ii]);
     }
   }
@@ -132,7 +137,7 @@ void PolyMesh::teeth()
     }
     int pid[2]= {it->second.p[0],it->second.p[1]};
     real_t chop[2];
-    chopLen(it->first, it->second, chop);
+    chopLen(it->first, it->second, chop,true);
     real_t teethlen=teethLen(it->first, it->second);
     for(int ii=0; ii<2; ii++) {
       Vec3 v0,v1;
@@ -153,7 +158,7 @@ void PolyMesh::teeth()
       poly2vert(poly[pid[ii]][0],lineseg);
       while(start+teethWidth<len) {
         start = nteeth*teethWidth;
-        Vec3 r0=v0+start*lineDir-chop[ii]*lineNormal;
+        Vec3 r0=v0+start*lineDir-chop[0]*lineNormal;
         r0+=normalOffset*lineNormal;
         std::vector<Vert>rect;
         make_rect(r0,lineDir,-lineNormal,teethWidth,teethlen,rect);
@@ -820,18 +825,25 @@ void PolyMesh::zz(real_t _t)
     }
   }
 }
-void PolyMesh::chopLen(const Edge&e, const EdgeVal & ev, real_t * len)
+void PolyMesh::chopLen(const Edge&e, const EdgeVal & ev, real_t * len, bool forteeth)
 {
   len[0]=0;
   len[1]=0;
-  if(!isConvex(e,ev)){
-    //no need to chop anything if concave
-    return;
-  }
   int pid[2]= {ev.p[0],ev.p[1]};
   Vec3 n1 = planes[pid[0]].n;
   Vec3 n2 = planes[pid[1]].n;
   real_t cosine=n1.dot(n2);
+
+  if(!isConvex(e,ev)){
+    //no need to chop anything if concave
+    if(forteeth){
+      if(cosine>0){
+        real_t halftan=half_tan(cosine);
+        len[0]=t*halftan*cosine;
+      }
+    }
+    return;
+  }
 
   if(cosine>0){
     real_t sine=std::sqrt(1-cosine*cosine);
@@ -846,8 +858,8 @@ void PolyMesh::chopLen(const Edge&e, const EdgeVal & ev, real_t * len)
     len[0]=t/halftan;
     len[1]=t/tangent;
   }
-
 }
+
 bool PolyMesh::isConvex(const Edge & e, const EdgeVal&ev)
 {
   int pid[2]= {ev.p[0],ev.p[1]};
