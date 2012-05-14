@@ -8,8 +8,8 @@ if($#ARGV<1){
 my $colWidth=5;
 my $row=0;
 my $col=0;
-#1inch is 90 px
-my $scale=90;
+#1inch is 96 px in CorelDraw
+my $scale=96;
 my $spreadscale=0.01*$scale;
 my $width=24*$scale;
 open OUT,">" ,$ARGV[1];
@@ -50,7 +50,7 @@ for (my $ii=0;$ii<$nLines;$ii++){
         my $line = <IN>;
  #       <IN>;#vertex indices
         my @toks = split /\s+/, $line;
-        print OUT '<path stroke-width="0.01in" fill="none" stroke="#000000"';
+        print OUT '<path stroke-width="0.01in" fill="none" stroke="red"';
     
         if($jj==0){
             for(my $kk=0;$kk<=$#toks;$kk++){
@@ -117,7 +117,7 @@ for (my $ii=0;$ii<$nLines;$ii++){
         $center[0]-=0.15*$scale;
         $center[1]+=0.15*$scale;
         print OUT "<text x=\"$center[0]\" y=\"$center[1]\"\n"; 
-        print OUT "font-family=\"Arial\" font-size=\"30\" fill=\"blue\" >\n";
+        print OUT "font-family=\"Arial\" font-size=\"30\" fill=\"blue\" stroke=\"magenta\">\n";
         print OUT "$ii\n</text>\n";
         print OUT "</g>\n";
     }
@@ -125,7 +125,7 @@ for (my $ii=0;$ii<$nLines;$ii++){
         $center[0]-=0.25*$scale;
         $center[1]+=0.15*$scale;
         print OUT "<text x=\"$center[0]\" y=\"$center[1]\"\n"; 
-        print OUT "font-family=\"Arial\" font-size=\"20\" fill=\"blue\" >\n";
+        print OUT "font-family=\"Arial\" font-size=\"20\" fill=\"blue\" stroke=\"magenta\">\n";
         print OUT "$pid[0] $pid[1]\n</text>\n";
         print OUT "</g>\n";
     }
