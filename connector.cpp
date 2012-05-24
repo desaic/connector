@@ -12,6 +12,7 @@ using ClipperLib::Polygons;
 using ClipperLib::Polygon;
 using ClipperLib::IntPoint;
 #define PI 3.1415926
+#define MAX_CONN_CNT 1
 real_t teethRatio=1;
 real_t min_depth_ratio=0.02;
 
@@ -24,14 +25,35 @@ real_t slotUnit=1;
 real_t startRatio=2;
 real_t testExtend=1;
 real_t reserveRatio=0.05;
-real_t extraRatio=0.12;
-real_t teethExtraRatio=0.04;
+real_t extraRatio=0.11;
+real_t teethExtraRatio=0.05;
 #define CLIP_VAL(x,y) ((x)<(y)?(y):(x))
 void make_rect(Vec3 &start, const Vec3 & lineDir, const Vec3 &normal,
                real_t t, real_t len,std::vector<Vert> & rect);
 void vert2poly(const std::vector<Vert> & rect, Polygon & p);
 void poly2vert(const Polygon & polySeg, std::vector<Vert>&lineseg);
 void fix_dir(Vec3 & dir, const Vec3 & lineDir, const Vec3 lineNormal);
+#include <fstream>
+void PolyMesh::adjlist()
+{
+  std::ofstream out("adjlist.txt");
+  std::map<Edge,EdgeVal>::iterator it;
+  std::vector< std::vector<int> > adjl;
+  adjl.resize(planes.size());
+  for(it=eset.begin(); it!=eset.end(); it++) {
+    int pid[2]= {it->second.p[0],it->second.p[1]};
+    adjl[pid[0]].push_back(pid[1]);
+    adjl[pid[1]].push_back(pid[0]);
+  }
+  for(size_t ii=0;ii<adjl.size();ii++){
+    out<<ii<<":";
+    for(size_t jj=0;jj<adjl[ii].size();jj++){
+      out<<" "<<adjl[ii][jj];
+    }
+    out<<"\n";
+  }
+  out.close();
+}
 void PolyMesh::chopAlongEdge(const Edge&e,const EdgeVal & ev, int ii,real_t depth, Polygon & rect)
 {
   int planeIdx = ev.p[ii];
@@ -118,7 +140,7 @@ void PolyMesh::teeth()
   real_t teethWidth = teethRatio*t;
   real_t extra=t*teethExtraRatio;
   for(it=eset.begin(); it!=eset.end(); it++) {
-    if(it->second.hasConn) {
+    if(it->second.connCnt>0) {
       continue;
     }
     real_t chop[2];
@@ -132,7 +154,7 @@ void PolyMesh::teeth()
   }
 
   for(it=eset.begin(); it!=eset.end(); it++) {
-    if(it->second.hasConn) {
+    if(it->second.connCnt>0) {
       continue;
     }
     int pid[2]= {it->second.p[0],it->second.p[1]};
@@ -198,7 +220,8 @@ ENDTEETHCHECK:
   }
 }
 
-int spots=3;
+int spots=5;
+int spotArr[5]={3,1,4,2,5};
 real_t polyArea(std::vector<Vert> & l)
 {
   int ii0=l.size()-1;
@@ -542,7 +565,7 @@ void PolyMesh::slot(real_t frac)
   real_t testLen=testExtend*unitlen;
   //  real_t end = start+slot_len;
   for(it=eset.begin(); it!=eset.end(); it++) {
-    if(it->second.hasConn) {
+    if(it->second.connCnt>=MAX_CONN_CNT) {
       continue;
     }
     Connector conn;
@@ -560,8 +583,9 @@ void PolyMesh::slot(real_t frac)
     shiftLen(it->first, it->second, shift);
     bool possible = true;
     real_t alpha=1.0/(spots+1);
-    for(int spot=1; spot<=spots; spot++) {
+    for(int spotCnt=0; spotCnt<spots; spotCnt++) {
       possible=true;
+      int spot=spotArr[spotCnt];
       alpha=spot/(spots+1.0);
       for(size_t ii=0; ii<2; ii++) {
         int planeIdx = pid[ii];
@@ -580,8 +604,8 @@ void PolyMesh::slot(real_t frac)
           it->second.v0=mid;
           it->second.norm=lineNormal;
           it->second.dir=lineDir;
-          it->second.connSize=slot_len;
           conn=Connector();
+          conn.slot_len=slot_len;
           connector(it->first, it->second, conn);
           if(intersect(conn)){
             possible=false;
@@ -634,7 +658,7 @@ ENDEDGELOOP:
 
 
     if(possible) {
-      it->second.hasConn=true;
+      it->second.connCnt++;
       conns.push_back(conn);
       for(size_t ii=0; ii<2; ii++) {
         int planeIdx = pid[ii];
@@ -704,7 +728,7 @@ void PolyMesh::connector(const  Edge & e, const EdgeVal&ev, Connector & conn)
   real_t u = unitlen;
   real_t extra=t*extraRatio;
   std::vector<Vec3> baseShape(6);
-  real_t slot_len=ev.connSize;
+  real_t slot_len=conn.slot_len;
   baseShape[0]=Vec3(0,0,0);
   baseShape[1]=Vec3(-u+extra/2,0,0);
   baseShape[2]=Vec3(-u+extra/4,-t,0);
@@ -783,6 +807,14 @@ void PolyMesh::connector(const  Edge & e, const EdgeVal&ev, Connector & conn)
     v0/=intscale;
     v0=planes[pid[0]].local2world(v0);
     conn.world[ii]=v0;
+  }
+  cosine=n1.dot(n2);
+  real_t halfcos = sqrt((1+cosine)/2);
+  if(isConvex(e,ev)){
+    for(size_t ii=0;ii<conn.size();ii++){
+      conn[ii]=rotate(conn[ii],halfcos);
+    }
+  }else{
   }
 }
 

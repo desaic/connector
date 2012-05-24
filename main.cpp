@@ -197,8 +197,12 @@ int main(int argc, char * argv[])
 	pm.scale(INT_SCALE);
 	pm.obj_scale=size;
 	pm.zz(t);
+//  pm.slot(2);
+//  pm.slot(2);
   pm.slot(1);
   pm.slot(0.5);
+
+  //pm.slot(0.75);
  // pm.connector();
   pm.teeth();
 	pm.save_result("zz.txt");
@@ -206,6 +210,7 @@ int main(int argc, char * argv[])
 	//doesnt matter
   Cam c;
   cam=&c;
+  pm.adjlist();
   glutMainLoop();
 	return 0;
 }

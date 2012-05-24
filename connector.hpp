@@ -57,19 +57,22 @@ struct EdgeVal{
 	//planes at its two sides
 	//two planes may share more than one edge if there is a hole between the two planes
 	int p[2];
-  bool hasConn;
+  int connCnt;
   Vec3 v0, norm,dir;
-  real_t connSize;
-  EdgeVal():hasConn(false){
+  //std::vector<real_t > connSize;
+  EdgeVal():connCnt(0){
+
   }
 };
 
 struct Connector{
   std::vector<Vec3>l;
   std::vector<Vec3>world;
+  real_t slot_len;
   int pid[2];
   /**@brief point attached to pid[0]*/
   Vec3 v0, norm,dir;
+  Connector():slot_len(0){}
   Vec3 local2plane(const Vec3 & v);
   size_t size()const {
     return l.size();
@@ -130,6 +133,7 @@ public:
 	void buildEdge();
 	void draw();
 	void edgeVertPos(const Edge &e, int planeIdx, Vec3 &v0,Vec3 & v1);
+  void adjlist();
 	//map from input vertex id to [1..n]
 	std::map<int,int>vid;
 	void save_result(const char * filename);
