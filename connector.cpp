@@ -1,16 +1,22 @@
+#ifdef _WIN32
+#define NOMINMAX
+#include <Windows.h>
+#endif
 #include "connector.hpp"
 #include <fstream>
 #include <iostream>
 #include <set>
 #include <algorithm>
 #include <cmath>
+
 #include <GL/gl.h>
 #include <GL/glu.h>
-using ClipperLib::long64;
-using ClipperLib::Clipper;
-using ClipperLib::Polygons;
-using ClipperLib::Polygon;
-using ClipperLib::IntPoint;
+//using ClipperLib::long64;
+//using ClipperLib::Clipper;
+//using ClipperLib::Polygons;
+//using ClipperLib::Polygon;
+//using ClipperLib::IntPoint;
+//using namespace ClipperLib;
 #define PI 3.1415926
 #define MAX_CONN_CNT 1
 real_t teethRatio=1;
@@ -30,8 +36,8 @@ real_t teethExtraRatio=0.05;
 #define CLIP_VAL(x,y) ((x)<(y)?(y):(x))
 void make_rect(Vec3 &start, const Vec3 & lineDir, const Vec3 &normal,
                real_t t, real_t len,std::vector<Vert> & rect);
-void vert2poly(const std::vector<Vert> & rect, Polygon & p);
-void poly2vert(const Polygon & polySeg, std::vector<Vert>&lineseg);
+void vert2poly(const std::vector<Vert> & rect, ClipperLib::Polygon & p);
+void poly2vert(const ClipperLib::Polygon & polySeg, std::vector<Vert>&lineseg);
 void fix_dir(Vec3 & dir, const Vec3 & lineDir, const Vec3 lineNormal);
 #include <fstream>
 void PolyMesh::adjlist()
@@ -54,7 +60,7 @@ void PolyMesh::adjlist()
   }
   out.close();
 }
-void PolyMesh::chopAlongEdge(const Edge&e,const EdgeVal & ev, int ii,real_t depth, Polygon & rect)
+void PolyMesh::chopAlongEdge(const Edge&e,const EdgeVal & ev, int ii,real_t depth, ClipperLib::Polygon & rect)
 {
   int planeIdx = ev.p[ii];
   VertIdx vi0 = vertp[e.id[0]][planeIdx];
@@ -93,15 +99,15 @@ void PolyMesh::chopAlongEdge(const Edge&e,const EdgeVal & ev, int ii,real_t dept
   Vec3 tv01=tv0+depth0*dir0;
   //offset a little so that tv0 is not exactly on the line
   tv0 += lineNormal*normalOffset;
-  rect.push_back(IntPoint((long64)tv0[0],(long64)tv0[1]));
-  rect.push_back(IntPoint((long64)tv01[0],(long64)tv01[1]));
+  rect.push_back(ClipperLib::IntPoint((ClipperLib::long64)tv0[0],(ClipperLib::long64)tv0[1]));
+  rect.push_back(ClipperLib::IntPoint((ClipperLib::long64)tv01[0],(ClipperLib::long64)tv01[1]));
 
   alpha = 1.001;
   Vec3 tv1=(1-alpha)*v0+alpha*v1;
   Vec3 tv11=tv1+depth1*dir1;
   tv1+=lineNormal*normalOffset;
-  rect.push_back(IntPoint((long64)tv11[0],(long64)tv11[1]));
-  rect.push_back(IntPoint((long64)tv1[0],(long64)tv1[1]));
+  rect.push_back(ClipperLib::IntPoint((ClipperLib::long64)tv11[0],(ClipperLib::long64)tv11[1]));
+  rect.push_back(ClipperLib::IntPoint((ClipperLib::long64)tv1[0],(ClipperLib::long64)tv1[1]));
 }
 
 real_t PolyMesh::teethLen(const Edge&e, const EdgeVal & ev)
@@ -147,7 +153,7 @@ void PolyMesh::teeth()
     chopLen(it->first, it->second, chop,true);
     int pid[2]={it->second.p[0],it->second.p[1]};
     for(int ii=0; ii<2; ii++) {
-      Polygon rect;
+		ClipperLib::Polygon rect;
       chopAlongEdge(it->first, it->second, ii,chop[0],rect);
       chopPoly(rect, pid[ii]);
     }
@@ -210,7 +216,7 @@ void PolyMesh::teeth()
         }
 ENDTEETHCHECK:
         if(valid) {
-          Polygon p;
+			ClipperLib::Polygon p;
           vert2poly(rect,p);
           chopPoly(p,pid[ii],ClipperLib::ctUnion);
         }
@@ -251,7 +257,7 @@ void PolyMesh::save_result(const char * filename)
     for(size_t jj=0; jj<poly[ii].size(); jj++) {
       out<<poly[ii][jj].size()<<"\n";
       for(size_t kk=0; kk<poly[ii][jj].size(); kk++) {
-        IntPoint point = poly[ii][jj][kk];
+		  ClipperLib::IntPoint point = poly[ii][jj][kk];
         real_t x = (real_t)point.X;
         real_t y = (real_t)point.Y;
         x=(x/intscale)*obj_scale;
@@ -620,7 +626,7 @@ void PolyMesh::slot(real_t frac)
         for(size_t jj=0; jj<rect.size(); jj++) {
           bool expected=true;
           for(size_t seg=0; seg<poly[planeIdx].size(); seg++) {
-            Polygon polySeg = poly[planeIdx][seg];
+			  ClipperLib::Polygon polySeg = poly[planeIdx][seg];
             std::vector<Vert>lineseg;
             poly2vert(polySeg, lineseg);
             bool ret = pnpoly(lineseg, rect[jj]);
@@ -678,7 +684,7 @@ ENDEDGELOOP:
         mid-=lineDir*(t)/2;
         std::vector<Vert> rect;
         make_rect(mid, lineDir, lineNormal,t,slot_len-2*reserveLen,rect);
-        Polygon p ;
+		ClipperLib::Polygon p ;
         vert2poly(rect,p);
         poly[planeIdx].push_back(p);
         planes[planeIdx].l.push_back(rect);
@@ -849,7 +855,7 @@ void PolyMesh::zz(real_t _t)
     int pid[2]= {it->second.p[0],it->second.p[1]};
     chopLen(it->first,it->second, len);
     for(size_t ii=0; ii<2; ii++) {
-      Polygon rect;
+		ClipperLib::Polygon rect;
       if(len[ii]>0){
         chopAlongEdge(it->first,it->second, ii,len[ii], rect);
         chopPoly(rect,pid[ii]);
@@ -930,7 +936,7 @@ bool lineIntersect(Vec3 la0,Vec3 la1,Vec3 lb0, Vec3 lb1) {
   return true;
 }
 
-void PolyMesh::chopPoly(const Polygon & rect, int pid,ClipperLib::ClipType ct)
+void PolyMesh::chopPoly(const ClipperLib::Polygon & rect, int pid,ClipperLib::ClipType ct)
 {
   ClipperLib::Clipper c;
   c.AddPolygon(poly[pid][0],ClipperLib::ptSubject);
@@ -1000,14 +1006,14 @@ void PolyMesh::draw()
   glEnable(GL_LIGHTING);
 }
 
-void vert2poly(const std::vector<Vert> & rect, Polygon & p)
+void vert2poly(const std::vector<Vert> & rect, ClipperLib::Polygon & p)
 {
   for(size_t ii=0; ii<rect.size(); ii++) {
-    p.push_back(IntPoint((long64)rect[ii].v.get(0),
-                         (long64)rect[ii].v.get(1)));
+    p.push_back(ClipperLib::IntPoint((ClipperLib::long64)rect[ii].v.get(0),
+                         (ClipperLib::long64)rect[ii].v.get(1)));
   }
 }
-void poly2vert(const Polygon & polySeg, std::vector<Vert>&lineseg) {
+void poly2vert(const ClipperLib::Polygon & polySeg, std::vector<Vert>&lineseg) {
   for(size_t kk=0; kk<polySeg.size(); kk++) {
     lineseg.push_back(Vec3((real_t)polySeg[kk].X,
                            (real_t)polySeg[kk].Y,0));

@@ -6,10 +6,11 @@
 #include <string>
 #include <map>
 #include <iostream>
+
 #include "clipper.hpp"
 //teeth width with respect to thickness
 extern real_t teethRatio;
-using ClipperLib::Polygon;
+//using ClipperLib::Polygon;
 struct Vert{
 	int id;
 	Vec3 v;
@@ -138,8 +139,8 @@ public:
 	std::map<int,int>vid;
 	void save_result(const char * filename);
   std::vector<Connector> conns;
-  void chopAlongEdge(const Edge&e, const EdgeVal & ev, int ii,real_t depth,  Polygon & rect);
-  void chopPoly(const Polygon & poly, int pid, ClipperLib::ClipType ct=ClipperLib::ctDifference);
+  void chopAlongEdge(const Edge&e, const EdgeVal & ev, int ii,real_t depth,  ClipperLib::Polygon & rect);
+  void chopPoly(const ClipperLib::Polygon & poly, int pid, ClipperLib::ClipType ct=ClipperLib::ctDifference);
   /**@param len length to chop away on each piece
   */
   void chopLen(const Edge&e, const EdgeVal & ev, real_t * len, bool forteeth=false);

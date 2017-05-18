@@ -1,4 +1,8 @@
 #include <iostream>
+#ifdef _WIN32
+#define NOMINMAX
+#include <Windows.h>
+#endif
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include <GL/freeglut.h>
